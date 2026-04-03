@@ -47,5 +47,19 @@ class RiotAPIClient:
         if data:
             for queue in data:
                 if queue.get('queueType') == 'RANKED_SOLO_5x5':
-                    return f"{queue['tier']} {queue['rank']} ({queue['leaguePoints']} LP)"
+                    tier = queue.get('tier', 'UNRANKED')
+                    rank = queue.get('rank', '')
+                    lp = queue.get('leaguePoints', 0)
+
+                    # Calculate the Winrate
+                    wins = queue.get('wins', 0)
+                    losses = queue.get('losses', 0)
+                    total_games = wins + losses
+
+                    if total_games > 0:
+                        winrate = wins / total_games
+                        return f"{tier} {rank} ({lp} LP) | **{winrate:.1f}% WR** ({total_games} games)"
+                    else:
+                        return f"{tier} {rank} ({lp} LP)"
+
         return "Unranked"  # Default to Unranked if they have no rank or API call fails
