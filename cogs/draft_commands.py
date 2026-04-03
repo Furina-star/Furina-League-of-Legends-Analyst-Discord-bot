@@ -84,7 +84,7 @@ class DraftCommands(commands.Cog):
 
     @commands.command()
     async def ping(self, ctx):
-        await ctx.send("I'm online nigga!")
+        await ctx.send("I'm online!")
 
     @commands.command(name="help")
     async def custom_help(self, ctx):
