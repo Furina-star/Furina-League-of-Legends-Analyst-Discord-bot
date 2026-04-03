@@ -20,7 +20,7 @@ If you want to run your own instance of Furina, follow these steps:
 
 ### 1. Clone the Repository
 \`\`\`bash
-git clone https://github.com/Furina-star/Furina-League-Bot.git
+git clone https://github.com/Furina-star/Furina-League-of-Legends-Analyst-Discord-bot.git
 cd Furina-League-Bot
 \`\`\`
 
