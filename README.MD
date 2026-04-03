@@ -6,7 +6,6 @@ A modular, object-oriented Discord application powered by the Riot Games API and
 
 * **🧠 AI Match Prediction (`f predict`):** Uses a trained PyTorch Neural Network to evaluate a live 5v5 draft and calculate the win probability for both the Blue and Red teams based on team composition.
 * **🕵️ Live Scouting (`f scout`):** Automatically detects which team the user is on and generates a detailed dossier of the enemy team, including Champion Mastery points and current Solo/Duo Queue ranks.
-* **⚙️ Modular Architecture:** Built using `discord.py` Cogs, a standalone Riot API Wrapper, and an abstracted AI processing layer for maximum performance and easy feature expansion.
 
 ## 🛠️ Tech Stack
 
@@ -21,7 +20,7 @@ If you want to run your own instance of Furina, follow these steps:
 
 ### 1. Clone the Repository
 \`\`\`bash
-git clone https://github.com/YourUsername/Furina-League-Bot.git
+git clone https://github.com/Furina-star/Furina-League-Bot.git
 cd Furina-League-Bot
 \`\`\`
 
