@@ -10,7 +10,7 @@ load_dotenv()
 RIOT_KEY = os.getenv('RIOT_API_KEY')
 REGION = "asia"  # Change region
 PLATFORM = "sg2"  # Change platform (e.g., "na1", "euw1", "kr1", etc.)
-TARGET_MATCHES = 1000  # How many games to mine
+TARGET_MATCHES = 50000  # How many games to mine
 CSV_FILENAME = "../ranked_drafts.csv"
 
 
