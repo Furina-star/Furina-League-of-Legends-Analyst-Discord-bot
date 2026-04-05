@@ -4,15 +4,8 @@ A modular, object-oriented Discord application powered by the Riot Games API and
 
 ## ✨ Features
 
-* **🧠 AI Match Prediction (`f predict`):** Uses a trained PyTorch Neural Network to evaluate a live 5v5 draft and calculate the win probability for both the Blue and Red teams based on team composition.
-* **🕵️ Live Scouting (`f scout`):** Automatically detects which team the user is on and generates a detailed dossier of the enemy team, including Champion Mastery points and current Solo/Duo Queue ranks.
-
-## 🛠️ Tech Stack
-
-* **Language:** Python 3
-* **Discord Integration:** `discord.py`
-* **Machine Learning:** `PyTorch`, `scikit-learn`, `pandas`
-* **Network/API:** `aiohttp` (Asynchronous HTTP requests)
+* **AI Match Prediction (`f predict`):** Uses a trained PyTorch Neural Network to evaluate a live 5v5 draft and calculate the win probability for both the Blue and Red teams based on team composition.
+* **Live Scouting (`f scout`):** Automatically detects which team the user is on and generates a detailed dossier of the enemy team, including Champion Mastery points and current Solo/Duo Queue ranks.
 
 ## 🚀 Installation & Setup
 
