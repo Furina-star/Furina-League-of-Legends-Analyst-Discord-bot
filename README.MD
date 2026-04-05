@@ -1,4 +1,4 @@
-# 💧 Furina League Analyst Bot
+# League Analyst Discord Bot
 
 A modular, object-oriented Discord application powered by the Riot Games API and PyTorch. Furina acts as a real-time Solo Queue analyst, calculating live match win conditions and aggregating enemy player statistics into clean dossiers.
 
