@@ -41,7 +41,7 @@ class RiotAPIClient:
 
     # Initiate getting the PUUID of the player as a function
     async def get_puuid(self, game_name, tag_line):
-        if not re.match(r'^[\w]{3,5}$', tag_line):  # Tags are 3-5 alphanumeric chars
+        if not re.match(r'^\w{3,5}$', tag_line):  # Tags are 3-5 alphanumeric chars
             return None
         encoded_name = quote(game_name)
         url = f"https://{self.region}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{encoded_name}/{tag_line}"

@@ -2,13 +2,13 @@ import pandas as pd
 import json
 import os
 
-# 1. Get the directory this exact script is sitting in (.../data/convert_data/)
+# Get the directory this exact script is sitting in (.../data/convert_data/)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# 2. Move up one level to the parent directory (.../data/)
+# Move up one level to the parent directory (.../data/)
 DATA_DIR = os.path.dirname(SCRIPT_DIR)
 
-# 3. Construct the absolute paths to your files
+# Construct the absolute paths to your files
 DEFAULT_CSV = os.path.join(DATA_DIR, "ranked_drafts.csv")
 DEFAULT_JSON = os.path.join(DATA_DIR, "Champion_Roles.json")
 
