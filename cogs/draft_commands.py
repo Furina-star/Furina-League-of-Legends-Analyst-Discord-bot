@@ -120,6 +120,32 @@ class DraftCommands(commands.Cog):
         await ctx.send(embed=embed)
 
     # Getting the Live game command.
+    # Formats the team display strings.
+    def _format_team_display(self, team_picks, raw_team):
+        display = []
+        for c in team_picks:
+            meta_wr = self.ai.meta_db.get(c, 0.5000) * 100
+            bot_tag = "🤖 " if self._check_if_bot(c, raw_team) else ""
+            display.append(f"{bot_tag}{c} `[{meta_wr:.1f}%]`")
+        return display
+
+    # Fetches mastery and rank concurrently for a team.
+    async def _fetch_team_stats(self, players):
+        async def fetch_rank_safe(sid):
+            if sid:
+                return await self.riot.get_summoner_rank(sid)
+            return "Unranked"
+
+        wr_tasks = [fetch_rank_safe(sid) for _, sid, _ in players]
+        mastery_tasks = [self.riot.get_champion_mastery(puuid, c_id) for puuid, _, c_id in players]
+
+        wr_results = await asyncio.gather(*wr_tasks)
+        masteries = await asyncio.gather(*mastery_tasks)
+
+        winrates = [parse_winrate(res) for res in wr_results]
+        avg_wr = sum(winrates) / len(winrates) if winrates else 50.0
+
+        return winrates, masteries, avg_wr
     # Predict the win condition before the game starts
     @commands.command()
     async def predict(self, ctx, *, full_riot_id: str):
@@ -130,113 +156,102 @@ class DraftCommands(commands.Cog):
             return
 
         await ctx.send(f"Fetching live match data for {game_name} #{tag_line}...")
+        async with ctx.typing():
+            try:
+                # Get PUUID
+                puuid = await self.riot.get_puuid(game_name, tag_line)
+                if not puuid:
+                    await ctx.send(f"⚠️ Could not find player {game_name} #{tag_line}. Check spelling!")
+                    return
 
-        try:
-            # This call out get_puuid function from RiotAPIClient Class in riot_api.py.
-            puuid = await self.riot.get_puuid(game_name, tag_line)
-            if not puuid:
-                await ctx.send(f"⚠️ Could not find player {game_name} #{tag_line}. Check spelling!")
-                return
+                # Get Live Match
+                match_data = await self.riot.get_live_match(puuid)
+                if not match_data:
+                    await ctx.send("⚠️ This player is not currently in a live match!")
+                    return
 
-            # This call out get_live_match function from RiotAPIClient Class in riot_api.py.
-            match_data = await self.riot.get_live_match(puuid)
-            if not match_data:
-                await ctx.send("⚠️ This player is not currently in a live match!")
-                return
+                # Sort the teams
+                raw_blue_team = [p for p in match_data['participants'] if p['teamId'] == 100]
+                raw_red_team = [p for p in match_data['participants'] if p['teamId'] == 200]
 
-            # Sort the teams
-            raw_blue_team = [p for p in match_data['participants'] if p['teamId'] == 100]
-            raw_red_team = [p for p in match_data['participants'] if p['teamId'] == 200]
+                blue_picks = sort_team_roles(raw_blue_team, self.champ_dict, self.meta_db)
+                red_picks = sort_team_roles(raw_red_team, self.champ_dict, self.meta_db)
 
-            blue_picks = sort_team_roles(raw_blue_team, self.champ_dict, self.meta_db)
-            red_picks = sort_team_roles(raw_red_team, self.champ_dict, self.meta_db)
+                if len(blue_picks) < 5 or len(red_picks) < 5:
+                    await ctx.send("⚠️ **Not enough players!** I only calculate full 5v5 matches.")
+                    return
 
-            if len(blue_picks) < 5 or len(red_picks) < 5:
-                await ctx.send("⚠️ **Not enough players!** I only calculate full 5v5 matches.")
-                return
+                # Use our new helper to format the display!
+                blue_display = self._format_team_display(blue_picks, raw_blue_team)
+                red_display = self._format_team_display(red_picks, raw_red_team)
 
-            # This part is just for display purposes, it grabs the winrate from the AI's meta database and adds a little bot tag if it detects a bot.
-            blue_display = []
-            for c in blue_picks:
-                # Grab the winrate from the AI, default to 50% if missing, and multiply by 100 for display
-                meta_wr = self.ai.meta_db.get(c, 0.5000) * 100
-                bot_tag = "🤖 " if self._check_if_bot(c, raw_blue_team) else ""
-                blue_display.append(f"{bot_tag}{c} `[{meta_wr:.1f}%]`")
+                # Get the Champion picks and set them in order
+                draft_dict = {
+                    'blueTopChamp': blue_picks[0], 'blueJungleChamp': blue_picks[1], 'blueMiddleChamp': blue_picks[2],
+                    'blueADCChamp': blue_picks[3], 'blueSupportChamp': blue_picks[4],
+                    'redTopChamp': red_picks[0], 'redJungleChamp': red_picks[1], 'redMiddleChamp': red_picks[2],
+                    'redADCChamp': red_picks[3], 'redSupportChamp': red_picks[4]
+                }
 
-            red_display = []
-            for c in red_picks:
-                meta_wr = self.ai.meta_db.get(c, 0.5000) * 100
-                bot_tag = "🤖 " if self._check_if_bot(c, raw_red_team) else ""
-                red_display.append(f"{bot_tag}{c} `[{meta_wr:.1f}%]`")
+                # Calculate base probability
+                base_blue_prob, _, blue_syn, red_syn = self.ai.predict_match(draft_dict)
 
-            # Basically Get the Champion picks and then set them in order.
-            draft_dict = {
-                'blueTopChamp': blue_picks[0], 'blueJungleChamp': blue_picks[1], 'blueMiddleChamp': blue_picks[2],
-                'blueADCChamp': blue_picks[3], 'blueSupportChamp': blue_picks[4],
-                'redTopChamp': red_picks[0], 'redJungleChamp': red_picks[1], 'redMiddleChamp': red_picks[2],
-                'redADCChamp': red_picks[3], 'redSupportChamp': red_picks[4]
-            }
+                # Get PUUIDs, Summoner IDs, and Champion IDs for live scouting
+                blue_players = [(p['puuid'], p.get('summonerId'), p['championId']) for p in raw_blue_team]
+                red_players = [(p['puuid'], p.get('summonerId'), p['championId']) for p in raw_red_team]
 
-            # Calculates the probability
-            base_blue_prob, _, blue_syn, red_syn = self.ai.predict_match(draft_dict)
+                # Use our new helper to do the heavy asynchronous lifting!
+                blue_winrates, blue_masteries, avg_blue_wr = await self._fetch_team_stats(blue_players)
+                red_winrates, red_masteries, avg_red_wr = await self._fetch_team_stats(red_players)
 
-            # Get PUUIDs, Summoner IDs, and Champion IDs for live scouting
-            blue_players = [(p['puuid'], p.get('summonerId'), p['championId']) for p in raw_blue_team]
-            red_players = [(p['puuid'], p.get('summonerId'), p['championId']) for p in raw_red_team]
+                # Pass everything into the Hybrid Algorithm
+                final_blue_prob, final_red_prob = self.ai.apply_hybrid_algorithm(
+                    base_blue_prob, blue_winrates, red_winrates, blue_masteries, red_masteries
+                )
 
-            # Create concurrent tasks for BOTH Ranked Win Rates AND Champion Mastery
-            blue_wr_tasks = [self.riot.get_summoner_rank(sid) for _, sid, _ in blue_players if sid]
-            red_wr_tasks = [self.riot.get_summoner_rank(sid) for _, sid, _ in red_players if sid]
+                # Send the results
+                embed = discord.Embed(title="🔴 LIVE MATCH PREDICTION", color=discord.Color.blue())
+                blue_text = (
+                        f"**Win Chance: {final_blue_prob * 100:.1f}%**\n"
+                        f"*(Avg WR: {avg_blue_wr:.1f}%)*\n"
+                        f"*(Synergy: {blue_syn * 100:+.1f})*\n\n"
+                        f"**Draft:**\n" + "\n".join(blue_display)
+                )
 
-            blue_mastery_tasks = [self.riot.get_champion_mastery(puuid, champ_id) for puuid, _, champ_id in
-                                  blue_players]
-            red_mastery_tasks = [self.riot.get_champion_mastery(puuid, champ_id) for puuid, _, champ_id in red_players]
+                red_text = (
+                        f"**Win Chance: {final_red_prob * 100:.1f}%**\n"
+                        f"*(Avg WR: {avg_red_wr:.1f}%)*\n"
+                        f"*(Synergy: {red_syn * 100:+.1f})*\n\n"
+                        f"**Draft:**\n" + "\n".join(red_display)
+                )
 
-            # Fire all the 20 tasks simultaneously
-            blue_wr_results = await asyncio.gather(*blue_wr_tasks)
-            red_wr_results = await asyncio.gather(*red_wr_tasks)
-            blue_masteries = await asyncio.gather(*blue_mastery_tasks)
-            red_masteries = await asyncio.gather(*red_mastery_tasks)
+                embed.add_field(name="🟦 Blue Team", value=blue_text, inline=True)
+                embed.add_field(name="🟥 Red Team", value=red_text, inline=True)
 
-            # Parse text into Floats
-            blue_winrates = [parse_winrate(res) for res in blue_wr_results]
-            red_winrates = [parse_winrate(res) for res in red_wr_results]
+                await ctx.send(embed=embed)
 
-            # Calculate team averages just for the Discord Display
-            avg_blue_wr = sum(blue_winrates) / len(blue_winrates) if blue_winrates else 50.0
-            avg_red_wr = sum(red_winrates) / len(red_winrates) if red_winrates else 50.0
+            except Exception as e:
+                await ctx.send(f"⚠️ An unexpected error occurred: {str(e)}")
 
-            # Pass everything into the Hybrid Algorithm for the final X-Factor calculation!
-            final_blue_prob, final_red_prob = self.ai.apply_hybrid_algorithm(
-                base_blue_prob, blue_winrates, red_winrates, blue_masteries, red_masteries
-            )
-
-            # Send the results to the discord, design doesn't matter at least lol.
-            embed = discord.Embed(title="🔴 LIVE MATCH PREDICTION", color=discord.Color.blue())
-            blue_text = (
-                    f"**Win Chance: {final_blue_prob * 100:.1f}%**\n"
-                    f"*(Avg WR: {avg_blue_wr:.1f}%)*\n"
-                    f"*(Synergy: {blue_syn * 100:+.1f})*\n\n"
-                    f"**Draft:**\n" + "\n".join(blue_display)
-            )
-
-            red_text = (
-                    f"**Win Chance: {final_red_prob * 100:.1f}%**\n"
-                    f"*(Avg WR: {avg_red_wr:.1f}%)*\n"
-                    f"*(Synergy: {red_syn * 100:+.1f})*\n\n"
-                    f"**Draft:**\n" + "\n".join(red_display)
-            )
-
-            embed.add_field(name="🟦 Blue Team", value=blue_text, inline=True)
-            embed.add_field(name="🟥 Red Team", value=red_text, inline=True)
-
-            await ctx.send(embed=embed)
-
-        except Exception as e:
-            await ctx.send(f"⚠️ An unexpected error occurred: {str(e)}")
-
+    # Getting the enemy information.
     # Initiate Dossier Builder as a function
     async def _build_enemy_dossier(self, match_data, enemy_team_id, embed):
+        # Mini helper function to fetch a single player's data concurrently
+        async def fetch_player_data(p, c_name, riot_id, e_puuid, c_id):
+            mastery_task = self.riot.get_champion_mastery(e_puuid, c_id)
+
+            # Helper to safely grab rank, checking summoner ID if needed
+            async def get_rank():
+                sum_id = p.get('summonerId') or await self.riot.get_summoner_id(e_puuid)
+                return await self.riot.get_summoner_rank(sum_id) if sum_id else "Unranked"
+
+            # Fire mastery and rank tasks for this specific player simultaneously
+            mastery, rank = await asyncio.gather(mastery_task, get_rank())
+            return c_name, riot_id, rank, mastery
+
+        tasks = []
+        bot_entries = []
+
         for p in match_data['participants']:
             if p['teamId'] == enemy_team_id:
                 e_puuid = p.get('puuid')
@@ -245,15 +260,22 @@ class DraftCommands(commands.Cog):
                 c_name = self.champ_dict.get(str(c_id), 'Unknown')
 
                 if p.get('bot', False) or not e_puuid:
-                    embed.add_field(name=f"🤖 {c_name} (Bot)", value="No data available.", inline=False)
-                    continue
+                    bot_entries.append(c_name)
+                else:
+                    # Append the un-awaited task to our list
+                    tasks.append(fetch_player_data(p, c_name, riot_id, e_puuid, c_id))
 
-                mastery = await self.riot.get_champion_mastery(e_puuid, c_id)
-                sum_id = p.get('summonerId') or await self.riot.get_summoner_id(e_puuid)
-                rank = await self.riot.get_summoner_rank(sum_id) if sum_id else "Unranked"
+        results = await asyncio.gather(*tasks)
 
-                embed.add_field(name=f"⚔️ {c_name} - {riot_id}",
-                                value=f"**Rank:** {rank}\n**Mastery:** {mastery:,} pts", inline=False)
+        # Add any bots to the embed
+        for c_name in bot_entries:
+            embed.add_field(name=f"🤖 {c_name} (Bot)", value="No data available.", inline=False)
+
+        # Add the real players to the embed
+        for c_name, riot_id, rank, mastery in results:
+            embed.add_field(name=f"⚔️ {c_name} - {riot_id}",
+                            value=f"**Rank:** {rank}\n**Mastery:** {mastery:,} pts", inline=False)
+
         return embed
 
     # This part checks what type of bs the enemy team is running
@@ -268,38 +290,39 @@ class DraftCommands(commands.Cog):
             return
 
         await ctx.send(f"🕵️ Scouting the enemy team for {game_name} #{tag_line}...")
+        async with ctx.typing():
 
-        try:
-            # This call out get_riot_puuid function from RiotAPIClient Class in riot_api.py.
-            puuid = await self.riot.get_puuid(game_name, tag_line)
-            if not puuid:
-                await ctx.send(f"⚠️ Could not find player {game_name} #{tag_line}. Check spelling!")
-                return
+            try:
+                # This call out get_riot_puuid function from RiotAPIClient Class in riot_api.py.
+                puuid = await self.riot.get_puuid(game_name, tag_line)
+                if not puuid:
+                    await ctx.send(f"⚠️ Could not find player {game_name} #{tag_line}. Check spelling!")
+                    return
 
-            # This call out get_live_match function from RiotAPIClient Class in riot_api.py.
-            match_data = await self.riot.get_live_match(puuid)
-            if not match_data:
-                await ctx.send("⚠️ This player is not currently in a live match!")
-                return
+                # This call out get_live_match function from RiotAPIClient Class in riot_api.py.
+                match_data = await self.riot.get_live_match(puuid)
+                if not match_data:
+                    await ctx.send("⚠️ This player is not currently in a live match!")
+                    return
 
-            # Figures which team the current user is on Blue or Red.
-            user_team = next((p['teamId'] for p in match_data['participants'] if p['puuid'] == puuid), None)
-            if not user_team:
-                await ctx.send("⚠️ Could not locate user in match data.")
-                return
+                # Figures which team the current user is on Blue or Red.
+                user_team = next((p['teamId'] for p in match_data['participants'] if p['puuid'] == puuid), None)
+                if not user_team:
+                    await ctx.send("⚠️ Could not locate user in match data.")
+                    return
 
-            enemy_team_id = 200 if user_team == 100 else 100
+                enemy_team_id = 200 if user_team == 100 else 100
 
-            # Building the Discord Embed
-            embed = discord.Embed(title="🕵️ Enemy Team Dossier", description=f"Scouting for **{game_name}**", color=discord.Color.dark_purple())
+                # Building the Discord Embed
+                embed = discord.Embed(title="🕵️ Enemy Team Dossier", description=f"Scouting for **{game_name}**", color=discord.Color.dark_purple())
 
-            # Get _build_enemy_dossier
-            embed = await self._build_enemy_dossier(match_data, enemy_team_id, embed)
+                # Get _build_enemy_dossier
+                embed = await self._build_enemy_dossier(match_data, enemy_team_id, embed)
 
-            await ctx.send(embed=embed)
+                await ctx.send(embed=embed)
 
-        except Exception as e:
-            await ctx.send(f"⚠️ An unexpected error occurred: {str(e)}")
+            except Exception as e:
+                await ctx.send(f"⚠️ An unexpected error occurred: {str(e)}")
 
 # Setup Hook or something whatever this is called.
 async def setup(bot):

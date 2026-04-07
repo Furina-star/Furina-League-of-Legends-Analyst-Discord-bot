@@ -52,7 +52,7 @@ def calculate_team_synergy(team_champs, synergy_matrix):
 # Wrapper Class
 class LeagueAI:
     # This function set up and load Label encoder and the model
-    def __init__(self, model_path='models/Lol_draft_predictor.pth', encoder_path='models/label_encoder.pkl', synergy_path='data/Synergy_Matrix.json', meta_path='data/Meta_DB.json'):
+    def __init__(self, model_path='models/Lol_draft_predictor.pth', encoder_path='models/label_encoder.pkl', synergy_path='data/Synergy_Matrix.json', meta_path='data/Meta_Champions.json'):
         print("Loading AI Model, Label Encoder, Synergy Matrix, and Meta DB...")
 
         # Load the Label encoder
