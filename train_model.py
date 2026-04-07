@@ -15,18 +15,30 @@ from ai_wrapper import Model, calculate_team_synergy
 # Load your CUSTOM Mined Data
 df = pd.read_csv("data/ranked_drafts.csv")
 
-# Load the Synergy Matrix before doing anything else
+# Load the Synergy Matrix
 print("Loading Synergy Matrix...")
 with open("data/Synergy_Matrix.json", "r") as f:
     synergy_matrix = json.load(f)
+
+# Load the Meta Champions
+print("Loading Meta Database...")
+with open("data/Meta_Champions.json", "r") as f:
+    meta_db = json.load(f)
+
 # Calculate Synergy Scores for every match using Pandas (Super Fast!)
 print("Calculating Team Synergy Scores...")
 blue_cols = ['blueTop', 'blueJungle', 'blueMid', 'blueADC', 'blueSupport']
 red_cols = ['redTop', 'redJungle', 'redMid', 'redADC', 'redSupport']
+all_cols = blue_cols + red_cols
 
 # This applies your calculator function to every single row in the CSV and creates two new columns
 df['blueSynergy'] = df.apply(lambda row: calculate_team_synergy([str(row[c]) for c in blue_cols], synergy_matrix), axis=1)
 df['redSynergy'] = df.apply(lambda row: calculate_team_synergy([str(row[c]) for c in red_cols], synergy_matrix), axis=1)
+
+# Create a quick helper function to grab the 10 win rates for every row in the CSV
+def get_meta_rates(row):
+    return [meta_db.get(str(row[c]), 0.5000) for c in all_cols]
+df['metaRates'] = df.apply(get_meta_rates, axis=1)
 
 # Grabbing every single champion out there just to be safe
 print("Downloading Master Champion List From Riot...")
@@ -55,22 +67,25 @@ num_unique_champions = len(le.classes_)
 
 x_champs = df[text_cols]
 x_synergies = df[['blueSynergy', 'redSynergy']]
+x_meta = df['metaRates']
 y = df['blueWin']
 
 # Split
-x_c_train, x_c_test, x_s_train, x_s_test, y_train, y_test = train_test_split(x_champs, x_synergies, y, test_size=0.2, random_state=42)
+x_c_train, x_c_test, x_s_train, x_s_test, x_m_train, x_m_test, y_train, y_test = train_test_split(x_champs, x_synergies, x_meta, y, test_size=0.2, random_state=42)
 
 # Tensors
 x_c_train_t = torch.tensor(x_c_train.values, dtype=torch.long)
+x_m_train_t = torch.tensor(x_m_train.tolist(), dtype=torch.float32)
 x_s_train_t = torch.tensor(x_s_train.values, dtype=torch.float32)
 y_train_t = torch.tensor(y_train.values, dtype=torch.float32).unsqueeze(1)
 
 x_c_test_t = torch.tensor(x_c_test.values, dtype=torch.long)
+x_m_test_t = torch.tensor(x_m_test.tolist(), dtype=torch.float32)
 x_s_test_t = torch.tensor(x_s_test.values, dtype=torch.float32)
 y_test_t = torch.tensor(y_test.values, dtype=torch.float32).unsqueeze(1)
 
 # Create DataLoaders for both Training and Validation
-train_dataset = TensorDataset(x_c_train_t, x_s_train_t, y_train_t)
+train_dataset = TensorDataset(x_c_train_t, x_s_train_t, x_m_train_t, y_train_t)
 train_loader = DataLoader(train_dataset, batch_size=256, shuffle=True, drop_last=True, num_workers=2)
 
 test_dataset = TensorDataset(x_c_test_t, x_s_test_t, y_test_t)
@@ -94,9 +109,9 @@ num_epochs = 40
 for epoch in range(num_epochs):
     model.train()
     running_loss = 0.0
-    for batch_c, batch_s, batch_y in train_loader:
+    for batch_c, batch_s, batch_m, batch_y in train_loader:
         optimizer.zero_grad()
-        loss = criterion(model(batch_c, batch_s), batch_y)
+        loss = criterion(model(batch_c, batch_s, batch_m), batch_y)
         loss.backward()
         optimizer.step()
         running_loss += loss.item()
@@ -106,8 +121,8 @@ for epoch in range(num_epochs):
     model.eval()
     val_loss = 0.0
     with torch.no_grad():
-        for batch_c, batch_s, batch_y in test_loader:
-            loss = criterion(model(batch_c, batch_s), batch_y)
+        for batch_c, batch_s, batch_m, batch_y in test_loader:
+            loss = criterion(model(batch_c, batch_s, batch_m), batch_y)
             val_loss += loss.item()
 
     avg_val_loss = val_loss / len(test_loader)
@@ -129,7 +144,7 @@ for epoch in range(num_epochs):
 # Evaluation & Confusion Matrix
 model.eval()
 with torch.no_grad():
-    predictions = model(x_c_test_t, x_s_test_t)
+    predictions = model(x_c_test_t, x_s_test_t, x_m_test_t)
     predicted_classes = (predictions >= 0.5).float()
 
 y_true = y_test_t.numpy()

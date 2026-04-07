@@ -155,9 +155,19 @@ class DraftCommands(commands.Cog):
                 await ctx.send("⚠️ **Not enough players!** I only calculate full 5v5 matches.")
                 return
 
-            # Get _check_if_bot function
-            blue_display = [f"🤖 {c}" if self._check_if_bot(c, raw_blue_team) else c for c in blue_picks]
-            red_display = [f"🤖 {c}" if self._check_if_bot(c, raw_red_team) else c for c in red_picks]
+            # This part is just for display purposes, it grabs the winrate from the AI's meta database and adds a little bot tag if it detects a bot.
+            blue_display = []
+            for c in blue_picks:
+                # Grab the winrate from the AI, default to 50% if missing, and multiply by 100 for display
+                meta_wr = self.ai.meta_db.get(c, 0.5000) * 100
+                bot_tag = "🤖 " if self._check_if_bot(c, raw_blue_team) else ""
+                blue_display.append(f"{bot_tag}{c} `[{meta_wr:.1f}%]`")
+
+            red_display = []
+            for c in red_picks:
+                meta_wr = self.ai.meta_db.get(c, 0.5000) * 100
+                bot_tag = "🤖 " if self._check_if_bot(c, raw_red_team) else ""
+                red_display.append(f"{bot_tag}{c} `[{meta_wr:.1f}%]`")
 
             # Basically Get the Champion picks and then set them in order.
             draft_dict = {
@@ -168,27 +178,38 @@ class DraftCommands(commands.Cog):
             }
 
             # Calculates the probability
-            base_blue_prob,_, blue_syn, red_syn = self.ai.predict_match(draft_dict)
+            base_blue_prob, _, blue_syn, red_syn = self.ai.predict_match(draft_dict)
 
-            blue_sum_ids = [p['summonerId'] for p in raw_blue_team if p.get('summonerId')]
-            red_sum_ids = [p['summonerId'] for p in raw_red_team if p.get('summonerId')]
+            # Get PUUIDs, Summoner IDs, and Champion IDs for live scouting
+            blue_players = [(p['puuid'], p.get('summonerId'), p['championId']) for p in raw_blue_team]
+            red_players = [(p['puuid'], p.get('summonerId'), p['championId']) for p in raw_red_team]
 
-            # Create the 10 concurrent tasks
-            blue_tasks = [self.riot.get_summoner_rank(sid) for sid in blue_sum_ids]
-            red_tasks = [self.riot.get_summoner_rank(sid) for sid in red_sum_ids]
+            # Create concurrent tasks for BOTH Ranked Win Rates AND Champion Mastery
+            blue_wr_tasks = [self.riot.get_summoner_rank(sid) for _, sid, _ in blue_players if sid]
+            red_wr_tasks = [self.riot.get_summoner_rank(sid) for _, sid, _ in red_players if sid]
 
-            # This prevents the 15-second hang
-            blue_results = await asyncio.gather(*blue_tasks)
-            red_results = await asyncio.gather(*red_tasks)
+            blue_mastery_tasks = [self.riot.get_champion_mastery(puuid, champ_id) for puuid, _, champ_id in
+                                  blue_players]
+            red_mastery_tasks = [self.riot.get_champion_mastery(puuid, champ_id) for puuid, _, champ_id in red_players]
 
-            # The hybrid algorithm
-            blue_winrates = [parse_winrate(res) for res in blue_results]
-            red_winrates = [parse_winrate(res) for res in red_results]
+            # Fire all the 20 tasks simultaneously
+            blue_wr_results = await asyncio.gather(*blue_wr_tasks)
+            red_wr_results = await asyncio.gather(*red_wr_tasks)
+            blue_masteries = await asyncio.gather(*blue_mastery_tasks)
+            red_masteries = await asyncio.gather(*red_mastery_tasks)
 
+            # Parse text into Floats
+            blue_winrates = [parse_winrate(res) for res in blue_wr_results]
+            red_winrates = [parse_winrate(res) for res in red_wr_results]
+
+            # Calculate team averages just for the Discord Display
             avg_blue_wr = sum(blue_winrates) / len(blue_winrates) if blue_winrates else 50.0
             avg_red_wr = sum(red_winrates) / len(red_winrates) if red_winrates else 50.0
 
-            final_blue_prob, final_red_prob = self.ai.apply_hybrid_algorithm(base_blue_prob, blue_winrates,red_winrates)
+            # Pass everything into the Hybrid Algorithm for the final X-Factor calculation!
+            final_blue_prob, final_red_prob = self.ai.apply_hybrid_algorithm(
+                base_blue_prob, blue_winrates, red_winrates, blue_masteries, red_masteries
+            )
 
             # Send the results to the discord, design doesn't matter at least lol.
             embed = discord.Embed(title="🔴 LIVE MATCH PREDICTION", color=discord.Color.blue())

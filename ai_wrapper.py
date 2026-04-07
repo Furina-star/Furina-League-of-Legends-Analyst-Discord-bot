@@ -12,7 +12,7 @@ class Model(nn.Module):
         self.embedding = nn.Embedding(num_embeddings=num_champions, embedding_dim=16)
 
         self.net = nn.Sequential(
-            nn.Linear(162, 256),
+            nn.Linear(172, 256),
             nn.BatchNorm1d(256),
             nn.ReLU(),
             nn.Dropout(0.25),
@@ -31,10 +31,10 @@ class Model(nn.Module):
             nn.Sigmoid()
         )
 
-    def forward(self, x, synergy_scores):
+    def forward(self, x, synergy_scores, meta_rates):
         embedded = self.embedding(x)
         flattened = embedded.view(x.size(0), -1)
-        combined = torch.cat((flattened, synergy_scores), dim=1)
+        combined = torch.cat((flattened, synergy_scores, meta_rates), dim=1)
         return self.net(combined)
 
 def calculate_team_synergy(team_champs, synergy_matrix):
@@ -52,8 +52,8 @@ def calculate_team_synergy(team_champs, synergy_matrix):
 # Wrapper Class
 class LeagueAI:
     # This function set up and load Label encoder and the model
-    def __init__(self, model_path='models/Lol_draft_predictor.pth', encoder_path='models/label_encoder.pkl', synergy_path='data/Synergy_Matrix.json'):
-        print("Loading AI Model, Label Encoder, Synergy Matrix...")
+    def __init__(self, model_path='models/Lol_draft_predictor.pth', encoder_path='models/label_encoder.pkl', synergy_path='data/Synergy_Matrix.json', meta_path='data/Meta_DB.json'):
+        print("Loading AI Model, Label Encoder, Synergy Matrix, and Meta DB...")
 
         # Load the Label encoder
         self.le = joblib.load(encoder_path)
@@ -61,6 +61,10 @@ class LeagueAI:
         # Load the torch model
         with open(synergy_path, "r") as f:
             self.synergy_matrix = json.load(f)
+
+        # Load the Meta DB into the bot's memory
+        with open(meta_path, "r") as f:
+            self.meta_db = json.load(f)
 
         checkpoint = torch.load(model_path, weights_only=True)
         self.model = Model(checkpoint['num_champs'])
@@ -96,11 +100,18 @@ class LeagueAI:
         blue_synergy = calculate_team_synergy(blue_champs, self.synergy_matrix)
         red_synergy = calculate_team_synergy(red_champs, self.synergy_matrix)
 
+        meta_list = []
+        for champ in blue_champs + red_champs:
+            # If the champ isn't in the database for some reason, default to 50% (0.5000)
+            meta_list.append(self.meta_db.get(champ, 0.5000))
+
         x_tensor = torch.tensor(df_input.values, dtype=torch.long)
         synergy_tensor = torch.tensor([[blue_synergy, red_synergy]], dtype=torch.float32)
 
+        meta_tensor = torch.tensor([meta_list], dtype=torch.float32)
+
         with torch.no_grad():
-            prediction = self.model(x_tensor, synergy_tensor).item()
+            prediction = self.model(x_tensor, synergy_tensor, meta_tensor).item()
 
         blue_win_prob = prediction
         red_win_prob = 1.0 - blue_win_prob
@@ -108,19 +119,32 @@ class LeagueAI:
         return blue_win_prob, red_win_prob, blue_synergy, red_synergy
 
     # This function calculates the winrates
-    def apply_hybrid_algorithm(self, base_blue_prob, blue_winrates, red_winrates):
+    def apply_hybrid_algorithm(self, base_blue_prob, blue_winrates, red_winrates, blue_masteries, red_masteries):
         # Calculate the average team winrate
         avg_blue = sum(blue_winrates) / len(blue_winrates) if blue_winrates else 50.0
         avg_red = sum(red_winrates) / len(red_winrates) if red_winrates else 50.0
 
         # Find the skill gap
         winrate_gap = avg_blue - avg_red
+        skill_modifier = (winrate_gap * 0.5) / 100.0
 
-        # Don't want player winrates to completely override the AI.
-        skill_weight = 0.5
-        modifier = (winrate_gap * skill_weight) / 100.0
+        # Calculate the mastery modifiers for both teams
+        def calculate_mastery_modifier(masteries):
+            team_mod = 0.0
+            for points in masteries:
+                if points < 10000:
+                    team_mod -= 0.015 # Penalty for first-timing
+                elif points > 100000:
+                    # Buff for One-Tricks (capped at 500k points)
+                    extra_points = min(points, 500000) - 100000
+                    team_mod += (extra_points / 100000) * 0.01
+            return team_mod
 
-        final_blue_prob = base_blue_prob + modifier
+        blue_x_factor = calculate_mastery_modifier(blue_masteries)
+        red_x_factor = calculate_mastery_modifier(red_masteries)
+
+        # Add everything together
+        final_blue_prob = base_blue_prob + skill_modifier + blue_x_factor - red_x_factor
 
         # Clamp the results so we never get mathematically impossible numbers like 105%
         final_blue_prob = max(0.01, min(0.99, final_blue_prob))

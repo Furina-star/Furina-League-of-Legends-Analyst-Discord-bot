@@ -1,32 +1,71 @@
 import pandas as pd
+from pandas import DataFrame
+import subprocess
+import sys
+import os
 
 """
-STEP 1: THE MINER (Add 5k new games)
-    - Open `data_miner.py`.
-    - Increase TARGET_MATCHES by 5,000 (e.g., 50000 -> 55000).
-    - Run `data_miner.py` and let it finish.
+This script automates the entire "Rolling Window" update process.
 
-STEP 2: THE PRUNER (Delete 5k old games)
-    - Run this script (`update_patch.py`).
-    - This chops off the oldest 5,000 games, resetting the CSV to a perfect 50k.
-
-STEP 3: THE MATH (Recalculate the Meta)
-    - Run `build_synergy_matrix.py`.
-    - This updates the JSON file with the newest champion synergies.
-
-STEP 4: THE BRAIN SURGERY (Retrain the AI)
-    - Run `train_model.py`.
-    - The AI will study the new CSV and new JSON to build a new .pth file.
-
-STEP 5: DEPLOYMENT
-    - Restart your Discord Bot script.
+BEFORE RUNNING:
+1. Open `data_miner.py` and increase `TARGET_MATCHES` by 5,000 (e.g., 50000 -> 55000).
+2. Save `data_miner.py`.
+3. Run this script! It will handle the rest.
 """
 
-print("Loading 55,000 matches...")
-df = pd.read_csv("data/ranked_drafts.csv")
 
-# Keep only the 50,000 MOST RECENT games (drops the oldest ones at the top)
-df = df.tail(50000)
+def run_script(script_path):
+    print(f"\n🚀 Starting: {script_path}...")
+    try:
+        # sys.executable ensures it uses the current Python virtual environment (.venv).
+        subprocess.run([sys.executable, script_path], check=True)
+        print(f"Finished: {script_path}!")
+    except subprocess.CalledProcessError as e:
+        print(f"\nError occurred while running {script_path}.")
+        print(f"System details: {e}")
+        print("Pipeline halted. Please fix the error above and try again.")
+        sys.exit(1)
 
-df.to_csv("data/ranked_drafts.csv", index=False)
-print("✅ Successfully pruned the oldest 5,000 matches. CSV is back to 50k!")
+
+def prune_database():
+    csv_path = "data/ranked_drafts.csv"
+    print(f"\n Loading matches from {csv_path}...")
+
+    if not os.path.exists(csv_path):
+        print(f"Error: Could not find {csv_path}!")
+        sys.exit(1)
+
+    df: DataFrame = pd.read_csv(csv_path)
+    original_count = len(df)
+    print(f"Current match count: {original_count}")
+
+    # Keep only the 50,000 MOST RECENT games (drops the oldest ones at the top).
+    df = df.tail(50000)
+
+    df.to_csv(csv_path, index=False)
+    print(f"✅ Successfully pruned {original_count - len(df)} old matches. CSV is back to 50k!")
+
+
+if __name__ == "__main__":
+    # The Safety Check.
+    confirm = input("Did you increase TARGET_MATCHES by 5,000 in data_miner.py? (y/n): ")
+
+    if confirm.lower() != 'y':
+        print("🛑 Stopping. Please go update data_miner.py first!")
+        sys.exit()
+
+    # Run the Data Miner.
+    run_script("data/convert_data/data_miner.py")
+
+    # Prune the Old Data (The Rolling Window) Calling the function.
+    prune_database()
+
+    # Update the Math (Synergies & Meta).
+    run_script("data/convert_data/build_synergy_matrix.py")
+    run_script("data/convert_data/build_meta_db.py")
+
+    #  Retrain the AI Brain.
+    run_script("train_model.py")
+
+    print("Pipeline Complete!")
+    print("You can now safely restart your Discord bot.")
