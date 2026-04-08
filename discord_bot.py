@@ -99,6 +99,28 @@ intents.message_content = True
 
 # Creating a subclass of commands.Bot
 class DiscordBot(commands.Bot):
+    # This is a special function that runs once when the bot starts up, before it connects to Discord.
+    async def setup_hook(self):
+        logger.info("Running one-time setup...")
+
+        # Initialize APIs and AI here so they only load once!
+        self.riot_client = RiotAPIClient(RIOT_KEY)
+        self.ai_system = LeagueAI()
+
+        # Attach the dictionaries and configs
+        self.meta_db = meta_db_cache
+        self.champ_dict = champ_dict_cache
+        self.server_dict = config.SERVER_TO_REGION
+
+        # Remove the default help
+        self.remove_command('help')
+
+        # Load Cogs
+        await self.load_extension("cogs.draft_commands")
+        await self.load_extension("cogs.general_commands")
+
+        logger.info("All Cogs and Systems loaded successfully!")
+
     # This shutdown the API Session completely if the bot itself shut down
     async def close(self):
         if hasattr(self, 'riot_client'):
@@ -131,20 +153,8 @@ if __name__ == "__main__":
 
     @bot.event
     async def on_ready():
-        bot.remove_command('help')
+        # Set the bot's activity status to show the custom prefix and a fun message
         print(f'Logged in as {bot.user.name}')
-
-        # Wake up the ducking tools.
-        bot.riot_client = RiotAPIClient(RIOT_KEY)
-        bot.ai_system = LeagueAI()
-        bot.meta_db = meta_db_cache
-        bot.champ_dict = champ_dict_cache
-        bot.server_dict = config.SERVER_TO_REGION
-
-        # And then dump everything to the Cog
-        await bot.load_extension("cogs.draft_commands")
-        await bot.load_extension("cogs.general_commands")
-
         logger.info("Furina Architecture Online and Ready!")
 
     bot.run(TOKEN)

@@ -1,9 +1,3 @@
-import pandas as pd
-from pandas import DataFrame
-import subprocess
-import sys
-import os
-
 """
 This script automates the entire "Rolling Window" update process.
 
@@ -13,6 +7,11 @@ BEFORE RUNNING:
 3. Run this script! It will handle the rest.
 """
 
+import pandas as pd
+from pandas import DataFrame
+import subprocess
+import sys
+import os
 
 def run_script(script_path):
     print(f"\n🚀 Starting: {script_path}...")
@@ -62,7 +61,7 @@ if __name__ == "__main__":
 
     # Update the Math (Synergies & Meta).
     run_script("data/convert_data/build_synergy_matrix.py")
-    run_script("data/convert_data/build_meta_db.py")
+    run_script("data/convert_data/build_meta.py")
 
     #  Retrain the AI Brain.
     run_script("train_model.py")

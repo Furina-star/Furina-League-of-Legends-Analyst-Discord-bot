@@ -3,12 +3,13 @@ This part of the Discord  League Analyst Bot
 is all about the draft commands,
 commands that analyze the live game, predict the win condition, and scout the enemy team.
 """
-
+import aiohttp
 import discord
 from discord.ext import commands
 import asyncio
 import re
 import logging
+from utils.embed_formatter import build_predict_embed, build_scout_embed
 
 # Get the logging system
 logger = logging.getLogger(__name__)
@@ -221,33 +222,32 @@ class DraftCommands(commands.Cog):
                 )
 
                 # Send the results
-                embed = discord.Embed(title="🔴 LIVE MATCH PREDICTION", color=discord.Color.blue())
-                blue_text = (
-                        f"**Win Chance: {final_blue_prob * 100:.1f}%**\n"
-                        f"*(Avg WR: {avg_blue_wr:.1f}%)*\n"
-                        f"*(Synergy: {blue_syn * 100:+.1f})*\n\n"
-                        f"**Draft:**\n" + "\n".join(blue_display)
+                embed = build_predict_embed(
+                    final_blue_prob, final_red_prob,
+                    avg_blue_wr, avg_red_wr,
+                    blue_syn, red_syn,
+                    blue_display, red_display
                 )
-
-                red_text = (
-                        f"**Win Chance: {final_red_prob * 100:.1f}%**\n"
-                        f"*(Avg WR: {avg_red_wr:.1f}%)*\n"
-                        f"*(Synergy: {red_syn * 100:+.1f})*\n\n"
-                        f"**Draft:**\n" + "\n".join(red_display)
-                )
-
-                embed.add_field(name="🟦 Blue Team", value=blue_text, inline=True)
-                embed.add_field(name="🟥 Red Team", value=red_text, inline=True)
-
                 await ctx.send(embed=embed)
 
+            # Error for Riot API issues, like if the servers are down or something.
+            except aiohttp.ClientError:
+                logger.error("Network error while connecting to Riot API in predict.")
+                await ctx.send("I couldn't connect to Riot's servers. They might be down or rate-limiting us!")
+
+            # Catches if Riot suddenly changes their JSON format and a key goes missing
+            except KeyError as e:
+                logger.error(f"Missing expected data from Riot API in predict: {e}")
+                await ctx.send("Riot returned unexpected match data.")
+
+            # The fallback for actual code bugs (like math errors)
             except Exception as e:
-                logger.exception("Error in predict command:")
-                await ctx.send(f"⚠️ An unexpected error occurred: {str(e)}")
+                logger.exception("Unexpected error in predict command:")
+                await ctx.send("An unexpected error occurred while analyzing this match.")
 
     # Getting the enemy information.
     # Initiate Dossier Builder as a function
-    async def _build_enemy_dossier(self, match_data, enemy_team_id, embed, server):
+    async def _fetch_enemy_data(self, match_data, enemy_team_id, server):
         # Mini helper function to fetch a single player's data concurrently
         async def fetch_player_data(p, c_name, riot_id, e_puuid, c_id):
             mastery_task = self.riot.get_champion_mastery(e_puuid, c_id, platform_override=server)
@@ -274,21 +274,11 @@ class DraftCommands(commands.Cog):
                 if p.get('bot', False) or not e_puuid:
                     bot_entries.append(c_name)
                 else:
-                    # Append the un-awaited task to our list
                     tasks.append(fetch_player_data(p, c_name, riot_id, e_puuid, c_id))
 
         results = await asyncio.gather(*tasks)
 
-        # Add any bots to the embed
-        for c_name in bot_entries:
-            embed.add_field(name=f"🤖 {c_name} (Bot)", value="No data available.", inline=False)
-
-        # Add the real players to the embed
-        for c_name, riot_id, rank, mastery in results:
-            embed.add_field(name=f"⚔️ {c_name} - {riot_id}",
-                            value=f"**Rank:** {rank}\n**Mastery:** {mastery:,} pts", inline=False)
-
-        return embed
+        return bot_entries, results
 
     # This part checks what type of bs the enemy team is running
     @commands.command()
@@ -335,16 +325,24 @@ class DraftCommands(commands.Cog):
                 enemy_team_id = 200 if user_team == 100 else 100
 
                 # Building the Discord Embed
-                embed = discord.Embed(title=f"🕵️ Enemy Team Dossier ({server.upper()})", description=f"Scouting for **{game_name}**", color=discord.Color.dark_purple())
-
-                # Get _build_enemy_dossier
-                embed = await self._build_enemy_dossier(match_data, enemy_team_id, embed, server)
-
+                bot_entries, player_results = await self._fetch_enemy_data(match_data, enemy_team_id, server)
+                embed = build_scout_embed(server, game_name, bot_entries, player_results)
                 await ctx.send(embed=embed)
 
+            # Error for Riot API issues, like if the servers are down or something.
+            except aiohttp.ClientError:
+                logger.error("Network error while connecting to Riot API in scout.")
+                await ctx.send("I couldn't connect to Riot's servers. They might be down or rate-limiting us!")
+
+            # Catches if Riot suddenly changes their JSON format and a key goes missing
+            except KeyError as e:
+                logger.error(f"Missing expected data from Riot API in scout: {e}")
+                await ctx.send("Riot returned unexpected match data.")
+
+            # The fallback for actual code bugs (like math errors)
             except Exception as e:
-                logger.exception("Error in scout command:")
-                await ctx.send(f"⚠️ An unexpected error occurred: {str(e)}")
+                logger.exception("Unexpected error in scout command:")
+                await ctx.send("An unexpected error occurred while analyzing this match.")
 
 # Setup Hook or something whatever this is called.
 async def setup(bot):

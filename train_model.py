@@ -43,7 +43,7 @@ df['metaRates'] = df.apply(get_meta_rates, axis=1)
 # Grabbing every single champion out there just to be safe
 print("Downloading Master Champion List From Riot...")
 version = requests.get("https://ddragon.leagueoflegends.com/api/versions.json").json()[0]
-champ_data = requests.get(f"http://ddragon.leagueoflegends.com/cdn/{version}/data/en_US/champion.json").json()
+champ_data = requests.get(f"https://ddragon.leagueoflegends.com/cdn/{version}/data/en_US/champion.json").json()
 
 all_champions = []
 for champ_id, info in champ_data['data'].items():

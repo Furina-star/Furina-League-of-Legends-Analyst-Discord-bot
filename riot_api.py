@@ -2,7 +2,7 @@
 This is the part of the code that directly interacts with Riot's servers to fetch data about players, matches, and more.
 It handles all the API calls, rate limits, and data parsing to provide clean and usable information for the rest of the bot to work with.
 """
-
+import random
 import aiohttp
 import asyncio
 from urllib.parse import quote
@@ -41,10 +41,17 @@ class RiotAPIClient:
                 # 200 means its good other than that it's an error like 429 below which gives Rate Limit Exceeded
                 if response.status == 200:
                     return await response.json()
+                # 429 means the API rate limit was exceeded, so we need to wait before retrying
                 elif response.status == 429:
                     retry_after = int(response.headers.get("Retry-After", 5))
                     logger.warning(f"[RATE LIMIT] Waiting {retry_after}s... (Attempt {attempt + 1}/{max_retries})")
                     await asyncio.sleep(retry_after)
+                # Exponential backoff + Jitter for server errors
+                elif response.status >= 500:
+                    sleep_time = (2 ** attempt) + random.uniform(0.1, 1.0)
+                    logger.warning(f"[SERVER ERROR {response.status}] Retrying in {sleep_time:.2f}s...")
+                    await asyncio.sleep(sleep_time)
+                # This error is the API itself
                 else:
                     logger.error(f"[API ERROR {response.status}] Failed to fetch: {url}")
                     return None
@@ -93,15 +100,15 @@ class RiotAPIClient:
         return None
 
     # Initiate Match History API as a function
-    async def get_match_history(self, puuid, count=20, queue_id=420, platform_override=None):
-        p = platform_override or self.platform
-        url = f"https://{p}.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?queue={queue_id}&start=0&count={count}"
+    async def get_match_history(self, puuid, count=20, queue_id=420, region_override=None):
+        r = region_override or self.region
+        url = f"https://{r}.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?queue={queue_id}&start=0&count={count}"
         return await self._fetch(url)
 
     # Initiate Match Details API as a function
-    async def get_match_details(self, match_id, platform_override=None):
-        p = platform_override or self.platform
-        url = f"https://{p}.api.riotgames.com/lol/match/v5/matches/{match_id}"
+    async def get_match_details(self, match_id, region_override=None):
+        r = region_override or self.region
+        url = f"https://{r}.api.riotgames.com/lol/match/v5/matches/{match_id}"
         return await self._fetch(url)
 
     # Helper function to format the rank string
