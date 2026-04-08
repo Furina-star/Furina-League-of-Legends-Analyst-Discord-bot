@@ -250,15 +250,14 @@ class DraftCommands(commands.Cog):
     # Initiate Dossier Builder as a function
     async def _fetch_enemy_data(self, match_data, enemy_team_id, server):
         # Mini helper function to fetch a single player's data concurrently
-        async def fetch_player_data(p, c_name, riot_id, e_puuid, c_id):
+        async def fetch_player_data(c_name, riot_id, e_puuid, c_id):
             mastery_task = self.riot.get_champion_mastery(e_puuid, c_id, platform_override=server)
 
             # Helper to safely grab rank, checking summoner ID if needed
             async def get_rank():
-                sum_id = p.get('summonerId') or await self.riot.get_summoner_id(e_puuid, platform_override=server)
-                return await self.riot.get_summoner_rank(sum_id, platform_override=server) if sum_id else "Unranked"
+                await asyncio.sleep(1.5)
+                return await self.riot.get_summoner_rank(e_puuid, platform_override=server)
 
-            # Fire mastery and rank tasks for this specific player simultaneously
             mastery, rank = await asyncio.gather(mastery_task, get_rank())
             return c_name, riot_id, rank, mastery
 
@@ -268,14 +267,14 @@ class DraftCommands(commands.Cog):
         for p in match_data['participants']:
             if p['teamId'] == enemy_team_id:
                 e_puuid = p.get('puuid')
-                riot_id = p.get('riotIdGlobalName') or p.get('summonerName') or 'Unknown Player'
+                riot_id = p.get('riotId') or p.get('summonerName') or 'Unknown Player'
                 c_id = p['championId']
                 c_name = self.champ_dict.get(str(c_id), 'Unknown')
 
                 if p.get('bot', False) or not e_puuid:
                     bot_entries.append(c_name)
                 else:
-                    tasks.append(fetch_player_data(p, c_name, riot_id, e_puuid, c_id))
+                    tasks.append(fetch_player_data(c_name, riot_id, e_puuid, c_id))
 
         results = await asyncio.gather(*tasks)
 

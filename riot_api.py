@@ -87,24 +87,12 @@ class RiotAPIClient:
         if not puuid:
             return 0
 
-        p = platform_override or self.platform
+        p = (platform_override or self.platform).lower()
         url = f"https://{p}.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/{puuid}/by-champion/{champ_id}"
         data = await self._fetch(url)
         if isinstance(data, dict):
             return data.get('championPoints', 0)
         return 0
-
-    # Initiate Summoner ID API as a function
-    async def get_summoner_id(self, puuid: str, platform_override: Optional[str] = None) -> Optional[str]:
-        if not puuid:
-            return None
-
-        p = platform_override or self.platform
-        url = f"https://{p}.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/{puuid}"
-        data = await self._fetch(url)
-        if isinstance(data, dict):
-            return data.get('id')
-        return None
 
     # Initiate Match History API as a function
     async def get_match_history(self, puuid, count=20, queue_id=420, region_override=None):
@@ -135,9 +123,9 @@ class RiotAPIClient:
         return base_str
 
     # Initiate Solo/Duo Rank API as a function
-    async def get_summoner_rank(self, summoner_id: str, platform_override: Optional[str] = None) -> str:
-        p = platform_override or self.platform
-        url = f"https://{p}.api.riotgames.com/lol/league/v4/entries/by-summoner/{summoner_id}"
+    async def get_summoner_rank(self, puuid: str, platform_override: Optional[str] = None) -> str:
+        p = (platform_override or self.platform).lower()
+        url = f"https://{p}.api.riotgames.com/lol/league/v4/entries/by-puuid/{puuid}"
         data = await self._fetch(url)
 
         if not isinstance(data, list) or not data:
