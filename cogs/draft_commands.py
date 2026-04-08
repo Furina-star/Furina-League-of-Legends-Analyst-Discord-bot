@@ -84,7 +84,7 @@ def sort_team_roles(team_participants, champ_dict, meta_db):
 
 # Cog Class
 class DraftCommands(commands.Cog):
-    def __init__(self, bot, riot_client, ai_system, meta_db, champ_dict):
+    def __init__(self, bot, riot_client, ai_system, meta_db, champ_dict, role_db):
         # Store everything here to use for the bot commands yeah yessir.
         self.bot = bot
         self.riot = riot_client
@@ -92,8 +92,9 @@ class DraftCommands(commands.Cog):
         self.meta_db = meta_db
         self.champ_dict = champ_dict
         self.server_dict = bot.server_dict
+        self.role_db = role_db
 
-    # Initiate the ban logic as a function
+        # Initiate the ban logic as a function
     def _extract_bans(self, match_data):
         blue_bans, red_bans = ["None"] * 5, ["None"] * 5
         b_count, r_count = 0, 0
@@ -186,8 +187,8 @@ class DraftCommands(commands.Cog):
                 raw_blue_team = [p for p in match_data['participants'] if p['teamId'] == 100]
                 raw_red_team = [p for p in match_data['participants'] if p['teamId'] == 200]
 
-                blue_picks = sort_team_roles(raw_blue_team, self.champ_dict, self.meta_db)
-                red_picks = sort_team_roles(raw_red_team, self.champ_dict, self.meta_db)
+                blue_picks = sort_team_roles(raw_blue_team, self.champ_dict, self.role_db)
+                red_picks = sort_team_roles(raw_red_team, self.champ_dict, self.role_db)
 
                 if len(blue_picks) < 5 or len(red_picks) < 5:
                     await ctx.send("⚠️ **Not enough players!** I only calculate full 5v5 matches.")
@@ -346,4 +347,4 @@ class DraftCommands(commands.Cog):
 
 # Setup Hook or something whatever this is called.
 async def setup(bot):
-    await bot.add_cog(DraftCommands(bot, bot.riot_client, bot.ai_system, bot.meta_db, bot.champ_dict))
+    await bot.add_cog(DraftCommands(bot, bot.riot_client, bot.ai_system, bot.meta_db, bot.champ_dict, bot.role_db))

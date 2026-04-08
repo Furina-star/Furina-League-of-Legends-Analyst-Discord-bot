@@ -47,7 +47,7 @@ async def test_fetch_retry_behavior_on_5xx():
     success_response.json.return_value = {"status": "success"}
 
     # This mock_get will simulate the server responses: first two attempts fail with 503, then the third attempt succeeds with 200
-    mock_get = AsyncMock()
+    mock_get = MagicMock()
     mock_get.return_value.__aenter__.side_effect = [
         error_response,  # Attempt 1: Fails
         error_response,  # Attempt 2: Fails

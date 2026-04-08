@@ -109,9 +109,18 @@ class DiscordBot(commands.Bot):
     async def setup_hook(self):
         logger.info("Running one-time setup...")
 
-        # 🚀 Use asyncio to push the blocking file read to a background thread!
+        # Use asyncio to push the blocking file read to a background thread!
+        def load_json_file(filepath):
+            with open(filepath, "r", encoding="utf-8") as f:
+                return json.load(f)
+
+        def load_champ_dict(filepath):
+            with open(filepath, "r", encoding="utf-8") as f:
+                return json.load(f)["mapping"]
+
         self.meta_db = await asyncio.to_thread(load_json_file, config.META_PATH)
-        self.champ_dict = await asyncio.to_thread(load_json_file, config.CHAMP_DICT_PATH)
+        self.role_db = await asyncio.to_thread(load_json_file, config.ROLES_PATH)
+        self.champ_dict = await asyncio.to_thread(load_champ_dict, config.CHAMP_DICT_PATH)
 
         # Initialize APIs and AI here so they only load once!
         self.riot_client = RiotAPIClient(config.RIOT_KEY)

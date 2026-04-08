@@ -2,6 +2,11 @@
 @File: config.py
 """
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
+RIOT_KEY = os.getenv("RIOT_API_KEY")
 
 # The Server Dictionary for RIOT API
 SERVER_TO_REGION = {
@@ -24,4 +29,5 @@ MODEL_PATH = os.path.join(BASE_DIR, 'models', 'Lol_draft_predictor.pth')
 ENCODER_PATH = os.path.join(BASE_DIR, 'models', 'label_encoder.pkl')
 SYNERGY_PATH = os.path.join(BASE_DIR, 'data', 'Synergy_Matrix.json')
 META_PATH = os.path.join(BASE_DIR, 'data', 'Meta_Champions.json')
-CHAMP_DICT_PATH = os.path.join(BASE_DIR, 'data', 'champion_dict.json')
+ROLES_PATH = os.path.join(BASE_DIR, 'data', 'Champion_Roles.json')
+CHAMP_DICT_PATH = os.path.join(BASE_DIR, 'data', 'champion_cache.json')
