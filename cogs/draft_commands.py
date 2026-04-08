@@ -13,13 +13,6 @@ import logging
 # Get the logging system
 logger = logging.getLogger(__name__)
 
-# Get the server dictionary
-SERVER_TO_REGION = {
-    "na1": "americas", "br1": "americas", "lan1": "americas", "las1": "americas", "oc1": "americas",
-    "euw1": "europe", "eun1": "europe", "tr1": "europe", "ru": "europe",
-    "kr": "asia", "jp1": "asia", "sg2": "asia", "tw2": "asia", "vn2": "asia", "th2": "asia", "ph2": "asia"
-}
-
 # Initiate Riot ID Parser as a function.
 # this is to prevent the user from formatting it wrong, for example they might type "Hide on bush KR1" instead of "Hide on bush#KR1".
 def parse_riot_id(full_riot_id: str):
@@ -97,6 +90,7 @@ class DraftCommands(commands.Cog):
         self.ai = ai_system
         self.meta_db = meta_db
         self.champ_dict = champ_dict
+        self.server_dict = bot.server_dict
 
     # Initiate the ban logic as a function
     def _extract_bans(self, match_data):
@@ -156,11 +150,11 @@ class DraftCommands(commands.Cog):
     async def predict(self, ctx, server: str, *, full_riot_id: str):
         # Automatically gets "americas", "asia", or "europe"
         server = server.lower()
-        if server not in SERVER_TO_REGION:
-            await ctx.send(f"⚠️ Invalid server! Valid servers are: {', '.join(SERVER_TO_REGION.keys())}")
+        if server not in self.server_dict:
+            await ctx.send(f"⚠️ Invalid server! Valid servers are: {', '.join(self.server_dict.keys())}")
             return
 
-        region = SERVER_TO_REGION[server]
+        region = self.server_dict[server]
 
         # This call out the Riot ID parser
         game_name, tag_line = parse_riot_id(full_riot_id)
@@ -298,11 +292,11 @@ class DraftCommands(commands.Cog):
     async def scout(self, ctx, server: str,  *, full_riot_id: str):
         # Automatically gets "americas", "asia", or "europe"
         server = server.lower()
-        if server not in SERVER_TO_REGION:
-            await ctx.send(f"⚠️ Invalid server! Valid servers are: {', '.join(SERVER_TO_REGION.keys())}")
+        if server not in self.server_dict:
+            await ctx.send(f"⚠️ Invalid server! Valid servers are: {', '.join(self.server_dict.keys())}")
             return
 
-        region = SERVER_TO_REGION[server]
+        region = self.server_dict[server]
 
         # This call out the Riot ID parser
         game_name, tag_line = parse_riot_id(full_riot_id)

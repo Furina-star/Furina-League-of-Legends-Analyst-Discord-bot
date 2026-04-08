@@ -30,6 +30,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Get the server dictionary
+SERVER_TO_REGION = {
+    "na1": "americas", "br1": "americas", "lan1": "americas", "las1": "americas", "oc1": "americas",
+    "euw1": "europe", "eun1": "europe", "tr1": "europe", "ru": "europe",
+    "kr": "asia", "jp1": "asia", "sg2": "asia", "tw2": "asia", "vn2": "asia", "th2": "asia", "ph2": "asia"
+}
+
 # Initiate Data Dragon dictionary API  as a function
 CACHE_FILE = "data/champion_cache.json"
 def get_champion_mapping():
@@ -99,7 +106,7 @@ intents.message_content = True
 # Creating a subclass of commands.Bot
 class DiscordBot(commands.Bot):
     # This shutdown the API Session completely if the bot itself shut down
-    async def on_ready(self):
+    async def close(self):
         if hasattr(self, 'riot_client'):
             await self.riot_client.close()
             logger.info("Riot API connection closed safely.")
@@ -136,9 +143,9 @@ if __name__ == "__main__":
         # Wake up the ducking tools.
         bot.riot_client = RiotAPIClient(RIOT_KEY)
         bot.ai_system = LeagueAI()
-
         bot.meta_db = meta_db_cache
         bot.champ_dict = champ_dict_cache
+        bot.server_dict = SERVER_TO_REGION
 
         # And then dump everything to the Cog
         await bot.load_extension("cogs.draft_commands")
