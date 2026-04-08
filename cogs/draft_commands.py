@@ -125,12 +125,15 @@ class DraftCommands(commands.Cog):
 
     # Fetches mastery and rank concurrently for a team.
     async def _fetch_team_stats(self, players, server):
-        async def fetch_rank_safe(sid):
+        async def fetch_rank_safe(puuid, sid):
+            if not sid:
+                sid = await self.riot.get_summoner_id(puuid, platform_override=server)
+
             if sid:
                 return await self.riot.get_summoner_rank(sid, platform_override=server)
             return "Unranked"
 
-        wr_tasks = [fetch_rank_safe(sid) for _, sid, _ in players]
+        wr_tasks = [fetch_rank_safe(puuid, sid) for puuid, sid, _ in players]
         mastery_tasks = [self.riot.get_champion_mastery(puuid, c_id, platform_override=server) for puuid, _, c_id in players]
 
         wr_results = await asyncio.gather(*wr_tasks)
@@ -144,6 +147,7 @@ class DraftCommands(commands.Cog):
         avg_wr = sum(winrates) / len(winrates) if winrates else 50.0
 
         return winrates, masteries, avg_wr
+
     # Predict the win condition before the game starts
     @commands.command()
     @commands.cooldown(1, 3, commands.BucketType.user)

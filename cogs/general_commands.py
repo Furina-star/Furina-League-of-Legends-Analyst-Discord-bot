@@ -15,7 +15,7 @@ class GeneralCommands(commands.Cog):
     @commands.command()
     @commands.cooldown(1, 1, commands.BucketType.user)
     async def ping(self, ctx):
-        await ctx.send("🏓 I'm online and ready to analyze!")
+        await ctx.send("I'm online and ready to analyze!")
 
     @commands.command(name="help")
     @commands.cooldown(1, 1, commands.BucketType.user)

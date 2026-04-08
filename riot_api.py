@@ -69,6 +69,9 @@ class RiotAPIClient:
 
     # Initiate Champion Mastery API as a function
     async def get_champion_mastery(self, puuid, champ_id, platform_override=None):
+        if not puuid:
+            return 0
+
         p = platform_override or self.platform
         url = f"https://{p}.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/{puuid}/by-champion/{champ_id}"
         data = await self._fetch(url)
@@ -78,6 +81,9 @@ class RiotAPIClient:
 
     # Initiate Summoner ID API as a function
     async def get_summoner_id(self, puuid, platform_override=None):
+        if not puuid:
+            return None
+
         p = platform_override or self.platform
         url = f"https://{p}.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/{puuid}"
         data = await self._fetch(url)
@@ -97,44 +103,43 @@ class RiotAPIClient:
         url = f"https://{p}.api.riotgames.com/lol/match/v5/matches/{match_id}"
         return await self._fetch(url)
 
+    # Helper function to format the rank string
+    @staticmethod
+    def _format_rank_str(queue_data):
+        tier = queue_data.get('tier', 'UNRANKED').title()
+        rank = queue_data.get('rank', '')
+        lp = queue_data.get('leaguePoints', 0)
+        wins = queue_data.get('wins', 0)
+        losses = queue_data.get('losses', 0)
+        total_games = wins + losses
+
+        base_str = f"{tier} {rank} ({lp} LP)"
+        if total_games > 0:
+            winrate = (wins / total_games) * 100
+            return f"{base_str} | **{winrate:.1f}% WR** ({total_games} games)"
+        return base_str
+
     # Initiate Solo/Duo Rank API as a function
-    async def get_summoner_rank(self, summoner_id):
-        url = f"https://{self.platform}.api.riotgames.com/lol/league/v4/entries/by-summoner/{summoner_id}"
+    async def get_summoner_rank(self, summoner_id, platform_override=None):
+        p = platform_override or self.platform
+        url = f"https://{p}.api.riotgames.com/lol/league/v4/entries/by-summoner/{summoner_id}"
         data = await self._fetch(url)
 
-        solo_rank = None
-        flex_rank = None
+        if not isinstance(data, list) or not data:
+            return "Unranked"
 
-        if isinstance(data, list):
-            for queue in data:
-                # The math for whichever queue they're in, we want to show the tier, rank, LP, and winrate if they have any games played
-                tier = queue.get('tier', 'UNRANKED').title()  # .title() makes 'GOLD' look like 'Gold'
-                rank = queue.get('rank', '')
-                lp = queue.get('leaguePoints', 0)
+        ranks_dict = {}
+        for queue in data:
+            q_type = queue.get('queueType')
+            if q_type == 'RANKED_SOLO_5x5':
+                ranks_dict['Solo'] = f"**Solo:** {self._format_rank_str(queue)}"
+            elif q_type == 'RANKED_FLEX_SR':
+                ranks_dict['Flex'] = f"**Flex:** {self._format_rank_str(queue)}"
 
-                wins = queue.get('wins', 0)
-                losses = queue.get('losses', 0)
-                total_games = wins + losses
+        results = []
+        if 'Solo' in ranks_dict:
+            results.append(ranks_dict['Solo'])
+        if 'Flex' in ranks_dict:
+            results.append(ranks_dict['Flex'])
 
-                # Format the winrate string
-                if total_games > 0:
-                    winrate = (wins / total_games) * 100
-                    rank_str = f"{tier} {rank} ({lp} LP) | **{winrate:.1f}% WR** ({total_games} games)"
-                else:
-                    rank_str = f"{tier} {rank} ({lp} LP)"
-
-                # Assign it to the correct variable
-                if queue.get('queueType') == 'RANKED_SOLO_5x5':
-                    solo_rank = f"**Solo:** {rank_str}"
-                elif queue.get('queueType') == 'RANKED_FLEX_SR':
-                    flex_rank = f"**Flex:** {rank_str}"
-
-        # Decide what to return to Discord
-        if solo_rank and flex_rank:
-            return f"{solo_rank}\n{flex_rank}"
-        elif solo_rank:
-            return solo_rank
-        elif flex_rank:
-            return flex_rank
-
-        return "Unranked" 
+        return "\n".join(results) if results else "Unranked"

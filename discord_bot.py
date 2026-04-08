@@ -24,7 +24,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("tests/logs/furina.log"),  # saves to a file
+        logging.FileHandler("logs/furina.log"),  # saves to a file
         logging.StreamHandler()              # still shows in console
     ]
 )
@@ -117,9 +117,9 @@ class DiscordBot(commands.Bot):
     # This handle spamming and other common command errors gracefully, without crashing the bot or spamming the channel with error messages.
     async def on_command_error(self, ctx, error):
         if isinstance(error, commands.CommandOnCooldown):
-            await ctx.send(f"⏳ **Slow down!** You can use this command again in `{error.retry_after:.1f}` seconds.")
+            await ctx.send(f"**Slow down!** You can use this command again in `{error.retry_after:.1f}` seconds.")
         elif isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send("⚠️ You are missing some arguments! Check `f help` for the correct format.")
+            await ctx.send("You are missing some arguments! Check `f help` for the correct format.")
         elif isinstance(error, commands.CommandNotFound):
             # Ignore commands that don't exist, like if someone types 'f something, something'
             pass
