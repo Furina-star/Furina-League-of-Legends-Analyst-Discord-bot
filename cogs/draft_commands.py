@@ -10,7 +10,8 @@ from discord import app_commands
 import asyncio
 import re
 import logging
-from utils.embed_formatter import build_predict_embed, build_scout_embed
+from utils.embed_formatter import build_predict_embeds, build_scout_embed
+from utils.views import PredictView
 from discord.utils import escape_mentions
 
 # Get the logging system
@@ -96,6 +97,19 @@ class DraftCommands(commands.Cog):
         self.server_dict = bot.server_dict
         self.role_db = role_db
 
+    # Autocomplete logic for Scout and Predict
+    async def server_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+
+        # Get the keys from server dictionary
+        servers = list(self.server_dict.keys())
+
+        choices = [
+            app_commands.Choice(name=server.upper(), value=server.upper())
+            for server in servers if current.lower() in server.lower()
+        ]
+
+        return choices[:25]
+
     # Initiate the ban logic as a function
     def _extract_bans(self, match_data):
         blue_bans, red_bans = ["None"] * 5, ["None"] * 5
@@ -155,6 +169,7 @@ class DraftCommands(commands.Cog):
     )
     @app_commands.checks.cooldown(1, 5, key=lambda i: i.user.id)
     @app_commands.checks.cooldown(2, 5, key=lambda i: None)
+    @app_commands.autocomplete(server=server_autocomplete)
     async def predict(self, interaction: discord.Interaction, server: str, full_riot_id: str):
         # Automatically gets "americas", "asia", or "europe"
         server = server.lower()
@@ -230,13 +245,14 @@ class DraftCommands(commands.Cog):
             )
 
             # Send the results
-            embed = build_predict_embed(
+            blue_embed, red_embed = build_predict_embeds(
                 final_blue_prob, final_red_prob,
                 avg_blue_wr, avg_red_wr,
                 blue_syn, red_syn,
                 blue_display, red_display
             )
-            await interaction.followup.send(embed=embed)
+            view = PredictView(blue_embed, red_embed)
+            await interaction.followup.send(embed=blue_embed, view=view)
 
         # Error for Riot API issues, like if the servers are down or something.
         except aiohttp.ClientError:
@@ -248,13 +264,7 @@ class DraftCommands(commands.Cog):
             logger.error(f"Missing expected data from Riot API in predict: {e}")
             await interaction.followup.send("Riot returned unexpected match data.")
 
-        # The fallback for actual code bugs (like math errors)
-        except Exception:
-            logger.exception("Unexpected error in predict command:")
-            await interaction.followup.send("An unexpected error occurred while analyzing this match.")
-
     # Getting the enemy information.
-
     # Helper number one for fetching enemy data
     async def _fetch_single_enemy(self, c_name, riot_id, e_puuid, c_id, server, region):
         mastery_task = self.riot.get_champion_mastery(e_puuid, c_id, platform_override=server)
@@ -332,6 +342,7 @@ class DraftCommands(commands.Cog):
     )
     @app_commands.checks.cooldown(1, 5, key=lambda i: i.user.id)
     @app_commands.checks.cooldown(2, 5, key=lambda i: None)
+    @app_commands.autocomplete(server=server_autocomplete)
     async def scout(self, interaction: discord.Interaction, server: str, full_riot_id: str):
         # Automatically gets "americas", "asia", or "europe"
         server = server.lower()
@@ -390,11 +401,6 @@ class DraftCommands(commands.Cog):
         except KeyError as e:
             logger.error(f"Missing expected data from Riot API in scout: {e}")
             await interaction.followup.send("Riot returned unexpected match data.")
-
-        # The fallback for actual code bugs (like math errors)
-        except Exception:
-            logger.exception("Unexpected error in scout command:")
-            await interaction.followup.send("An unexpected error occurred while analyzing this match.")
 
 # Setup Hook or something whatever this is called.
 async def setup(bot):

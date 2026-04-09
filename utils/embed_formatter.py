@@ -5,7 +5,7 @@ It takes in the relevant data and constructs a Discord Embed object with the app
 
 import discord
 import re
-from typing import List
+from typing import List, Tuple
 
 # For help commands in cogs
 def build_help_embed() -> discord.Embed:
@@ -39,33 +39,34 @@ def build_help_embed() -> discord.Embed:
     return embed
 
 # For predict commands in cogs
-def build_predict_embed(blue_prob: float, red_prob: float,
-                        avg_blue_wr: float, avg_red_wr: float,
-                        blue_synergy: float, red_synergy: float,
-                        blue_display: List[str], red_display: List[str]) -> discord.Embed:
-    embed = discord.Embed(title="🔴 LIVE MATCH PREDICTION", color=discord.Color.blue())
+def build_predict_embeds(blue_prob: float, red_prob: float,
+                         avg_blue_wr: float, avg_red_wr: float,
+                         blue_synergy: float, red_synergy: float,
+                         blue_display: List[str], red_display: List[str]) -> Tuple[discord.Embed, discord.Embed]:
 
+    description = f"**Blue Win Chance:** {blue_prob * 100:.1f}%\n**Red Win Chance:** {red_prob * 100:.1f}%"
+
+    # Blue
+    blue_embed = discord.Embed(title="🔴 LIVE MATCH PREDICTION", description=description, color=discord.Color.blue())
     blue_text = (
-            f"**Win Chance: {blue_prob * 100:.1f}%**\n"
             f"*(Avg WR: {avg_blue_wr:.1f}%)*\n"
             f"*(Synergy: {blue_synergy * 100:+.1f})*\n\n"
             f"**Draft:**\n" + "\n".join(blue_display)
     )
+    blue_embed.add_field(name="🟦 Blue Team Data", value=blue_text, inline=False)
 
+    # Red
+    red_embed = discord.Embed(title="🔴 LIVE MATCH PREDICTION", description=description, color=discord.Color.red())
     red_text = (
-            f"**Win Chance: {red_prob * 100:.1f}%**\n"
             f"*(Avg WR: {avg_red_wr:.1f}%)*\n"
             f"*(Synergy: {red_synergy * 100:+.1f})*\n\n"
             f"**Draft:**\n" + "\n".join(red_display)
     )
+    red_embed.add_field(name="🟥 Red Team Data", value=red_text, inline=False)
 
-    embed.add_field(name="🟦 Blue Team", value=blue_text, inline=True)
-    embed.add_field(name="🟥 Red Team", value=red_text, inline=True)
-
-    return embed
+    return blue_embed, red_embed
 
 # Helper functions for _generate_player_tags
-
 # OTP and First timer detection
 def _get_mastery_tags(mastery: int) -> list:
     if mastery >= 1000000:

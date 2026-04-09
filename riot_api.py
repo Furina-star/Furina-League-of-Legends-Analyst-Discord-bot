@@ -3,15 +3,16 @@ This is the part of the code that directly interacts with Riot's servers to fetc
 It handles all the API calls, rate limits, and data parsing to provide clean and usable information for the rest of the bot to work with.
 """
 
-import random
 import aiohttp
 import asyncio
-from urllib.parse import quote
+import random
 import logging
-from typing import Optional, Dict, Any, List, Union
+from typing import Optional, Union, Dict, Any, List
+from urllib.parse import quote
+from utils.cache import RiotCache  # 🚨 Import our new Cache system!
 
-# Get the logging system
 logger = logging.getLogger(__name__)
+
 
 class RiotAPIClient:
     # This sill goofy ass remembers the key and regions
@@ -20,6 +21,12 @@ class RiotAPIClient:
         self.platform = default_platform
         self.region = default_region
         self._session = None
+        self.cache = RiotCache()
+        self._semaphore = asyncio.Semaphore(15)
+
+        # Set up the database when the bot starts
+    async def setup_cache(self):
+        await self.cache.setup()
 
     # Safely get or create session
     def _get_session(self):
@@ -33,7 +40,19 @@ class RiotAPIClient:
         if self._session and not self._session.closed:
             await self._session.close()
 
-    async def _fetch(self, url: str, max_retries: int = 3) -> Optional[Union[Dict[str, Any], List[Any]]]:
+    # This function handles the API calls at its maximum efficiency while respecting rate limits and caching results to minimize unnecessary calls.
+    async def _fetch(self, url: str, max_retries: int = 3, cache_ttl: int = 0) -> Optional[
+        Union[Dict[str, Any], List[Any]]]:
+        # Check the cache first before making an API call! If cache_ttl is set to 0, we skip caching and always fetch fresh data.
+        if cache_ttl > 0:
+            cached_data = await self.cache.get(url)
+            if cached_data: return cached_data
+
+        # The bouncer 
+        async with self._semaphore:
+            headers = {"X-Riot-Token": self.api_key}
+            session = self._get_session()
+
         headers = {"X-Riot-Token": self.api_key}
         session = self._get_session()
 
@@ -42,7 +61,11 @@ class RiotAPIClient:
                 async with session.get(url, headers=headers, timeout=10) as response:
                     # 200 means its good other than that it's an error like 429 below which gives Rate Limit Exceeded
                     if response.status == 200:
-                        return await response.json()
+                        data = await response.json()
+                        # 2. Save successful fetches to the cache for next time!
+                        if cache_ttl > 0:
+                            await self.cache.set(url, data, ttl_seconds=cache_ttl)
+                        return data
                     # 429 means the API rate limit was exceeded, so we need to wait before retrying
                     elif response.status == 429:
                         retry_after = int(response.headers.get("Retry-After", 5))
@@ -68,10 +91,10 @@ class RiotAPIClient:
 
     # Initiate getting the PUUID of the player as a function
     async def get_puuid(self, game_name: str, tag_line: str, region_override: Optional[str] = None) -> Optional[str]:
-        r= region_override or self.region
+        r = region_override or self.region
         encoded_name = quote(game_name)
         url = f"https://{r}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{encoded_name}/{tag_line}"
-        data = await self._fetch(url)
+        data = await self._fetch(url, cache_ttl=86400)
         if isinstance(data, dict):
             return data.get('puuid')
         return None
@@ -80,7 +103,7 @@ class RiotAPIClient:
     async def get_live_match(self, puuid: str, platform_override: Optional[str] = None) -> Optional[Dict[str, Any]]:
         p = platform_override or self.platform
         url = f"https://{p}.api.riotgames.com/lol/spectator/v5/active-games/by-summoner/{puuid}"
-        return await self._fetch(url)
+        return await self._fetch(url, cache_ttl=0)
 
     # Initiate Champion Mastery API as a function
     async def get_champion_mastery(self, puuid: str, champ_id: int, platform_override: Optional[str] = None) -> int:
@@ -89,7 +112,7 @@ class RiotAPIClient:
 
         p = (platform_override or self.platform).lower()
         url = f"https://{p}.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/{puuid}/by-champion/{champ_id}"
-        data = await self._fetch(url)
+        data = await self._fetch(url, cache_ttl=3600)
         if isinstance(data, dict):
             return data.get('championPoints', 0)
         return 0
@@ -98,13 +121,13 @@ class RiotAPIClient:
     async def get_match_history(self, puuid, count=20, queue_id=420, region_override=None):
         r = region_override or self.region
         url = f"https://{r}.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?queue={queue_id}&start=0&count={count}"
-        return await self._fetch(url)
+        return await self._fetch(url, cache_ttl=300)
 
     # Initiate Match Details API as a function
     async def get_match_details(self, match_id, region_override=None):
         r = region_override or self.region
         url = f"https://{r}.api.riotgames.com/lol/match/v5/matches/{match_id}"
-        return await self._fetch(url)
+        return await self._fetch(url, cache_ttl=86400)
 
     # Helper function to format the rank string
     @staticmethod
@@ -114,7 +137,7 @@ class RiotAPIClient:
         lp = queue_data.get('leaguePoints', 0)
         wins = queue_data.get('wins', 0)
         losses = queue_data.get('losses', 0)
-        hot_streak = queue_data.get('hot_streak', False)
+        hot_streak = queue_data.get('hotStreak', False)
         total_games = wins + losses
 
         # Adding a fire emoji for players on a win streak
@@ -126,11 +149,12 @@ class RiotAPIClient:
             return f"{base_str} | **{winrate:.1f}% WR** ({total_games} games)"
         return base_str
 
-    # Initiate Solo/Duo Rank API as a function
+    # Initiate Rank API as a function
     async def get_summoner_rank(self, puuid: str, platform_override: Optional[str] = None) -> str:
         p = (platform_override or self.platform).lower()
         url = f"https://{p}.api.riotgames.com/lol/league/v4/entries/by-puuid/{puuid}"
-        data = await self._fetch(url)
+
+        data = await self._fetch(url, cache_ttl=3600)
 
         if not isinstance(data, list) or not data:
             return "Unranked"

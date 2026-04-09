@@ -17,7 +17,9 @@ import json
 import requests
 from riot_api import RiotAPIClient
 from ai_wrapper import LeagueAI
+from utils.translator import DiscordTranslator
 import logging
+import traceback
 import config
 
 # This creates and print debugs logs properly.
@@ -74,7 +76,7 @@ def load_meta_roles():
         with open('data/Champion_Roles.json', 'r') as file:
             return json.load(file)
     except FileNotFoundError:
-        logger.warning("⚠️ CRITICAL: Could not find data/Champion_Roles.json!")
+        logger.warning("CRITICAL: Could not find data/Champion_Roles.json!")
         return {}
 
 # Creating a subclass of commands.Bot
@@ -101,8 +103,11 @@ class DiscordBot(commands.Bot):
         self.role_db = await asyncio.to_thread(load_json, config.ROLES_PATH)
         self.server_dict = config.SERVER_TO_REGION
 
-        # Initialize APIs and AI
+        # Initialize APIs
         self.riot_client = RiotAPIClient(config.RIOT_KEY)
+        await self.riot_client.setup_cache()
+
+        # Initialize AI
         self.ai_system = LeagueAI()
 
         # Load Cogs (Make sure to load your new general_commands cog where /help is!)
@@ -110,13 +115,48 @@ class DiscordBot(commands.Bot):
         await self.load_extension("cogs.general_commands")
         # await self.load_extension("cogs.general_commands") # Uncomment if you made this file!
 
+        # Sync Translator
+        logger.info("Setting up Translator...")
+        await self.tree.set_translator(DiscordTranslator())
+
+        # Set the error handler for the translator to log errors without crashing the bot
+        self.tree.on_error = self.on_tree_error
+
         # Sync slash commands
         logger.info("Syncing slash commands to Discord...")
         await self.tree.sync()
-        logger.info("Slash commands synced successfully!")
 
-        # Slash Command Error Handler!
-        self.tree.on_error = self.on_app_command_error
+        logger.info("Slash commands and Translator synced successfully!")
+
+    # Global Error handler
+    async def on_tree_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        # Handles cooldowns
+        if isinstance(error, app_commands.CommandOnCooldown):
+            cooldown_msg = f"**Slow down!** You can use this command again in `{error.retry_after:.1f}` seconds."
+            if not interaction.response.is_done():
+                await interaction.response.send_message(cooldown_msg, ephemeral=True)
+            else:
+                await interaction.followup.send(cooldown_msg, ephemeral=True)
+            return  # Stop here! Don't print a scary red error for a simple cooldown.
+
+        # Handle actual crashes and bugs
+        original_error = getattr(error, 'original', error)
+
+        # Print the detailed traceback to your server console
+        logger.error(f"CRASH in command '/{interaction.command.name}':")
+        traceback.print_exception(type(original_error), original_error, original_error.__traceback__)
+
+        # Send a polite, hidden message to the user
+        error_msg = "**A critical error occurred while processing your request.**\nWill fix it as soon as possible! If this keeps happening, please contact the bot owner."
+
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.send_message(error_msg, ephemeral=True)
+            else:
+                await interaction.followup.send(error_msg, ephemeral=True)
+        except discord.HTTPException:
+            # If Discord's servers are dying, just ignore it.
+            pass
 
     async def close(self):
         if hasattr(self, 'riot_client'):
@@ -124,19 +164,6 @@ class DiscordBot(commands.Bot):
             logger.info("Riot API connection closed safely.")
         await super().close()
 
-    # This handle spamming and other common command errors gracefully, without crashing the bot or spamming the channel with error messages.
-    async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        if isinstance(error, app_commands.CommandOnCooldown):
-            if interaction.response.is_done():
-                await interaction.followup.send(f"⏳ **Slow down!** You can use this command again in `{error.retry_after:.1f}` seconds.", ephemeral=True)
-            else:
-                await interaction.response.send_message(f"⏳ **Slow down!** You can use this command again in `{error.retry_after:.1f}` seconds.", ephemeral=True)
-        else:
-            logger.error(f"Ignoring exception in slash command {interaction.command.name}:", exc_info=error)
-            if interaction.response.is_done():
-                await interaction.followup.send("An unexpected error occurred.", ephemeral=True)
-            else:
-                await interaction.response.send_message("An unexpected error occurred.", ephemeral=True)
 
 if __name__ == "__main__":
     if not config.DISCORD_TOKEN or not config.RIOT_KEY:
