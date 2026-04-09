@@ -13,6 +13,9 @@ def test_parse_riot_id():
     # Test space formatting
     assert parse_riot_id("Faker KR1") == ("Faker", "KR1")
 
+    # Test weird multi-spacing formatting
+    assert parse_riot_id("Hide   on   bush   KR1") == ("Hide   on   bush", "KR1")
+
     # Test missing tag
     assert parse_riot_id("JustAName") == (None, None)
 
@@ -40,10 +43,10 @@ def test_sort_team_roles():
     # Create a fake team of 5 players
     fake_team = [
         {"championId": 1, "spell1Id": 4, "spell2Id": 12},  # Top
-        {"championId": 2, "spell1Id": 4, "spell2Id": 7},  # ADC
+        {"championId": 2, "spell1Id": 4, "spell2Id": 7},   # ADC
         {"championId": 3, "spell1Id": 4, "spell2Id": 14},  # Mid
         {"championId": 4, "spell1Id": 11, "spell2Id": 4},  # Jungle, especially Smite (11) should be a dead giveaway
-        {"championId": 5, "spell1Id": 4, "spell2Id": 3}  # Support
+        {"championId": 5, "spell1Id": 4, "spell2Id": 3}    # Support
     ]
 
     roles = sort_team_roles(fake_team, fake_champ_dict, fake_meta_db)

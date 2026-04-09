@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 from cogs.draft_commands import DraftCommands
 
+
 # Sets up a fake bot, fake Riot API, and fake AI for testing.
 @pytest.fixture
 def setup_cog():
@@ -14,6 +15,7 @@ def setup_cog():
     cog.server_dict = {"na1": "americas"}
     return cog, mock_riot, mock_ai
 
+
 # Creates a fake Discord interaction to simulate a user using a slash command.
 @pytest.fixture
 def mock_interaction():
@@ -22,7 +24,12 @@ def mock_interaction():
     interaction.response.defer = AsyncMock()
     interaction.response.send_message = AsyncMock()
     interaction.followup.send = AsyncMock()
+
+    # Set a default locale for testing translations (if your commands use translations)
+    interaction.locale = "en-US"
+
     return interaction
+
 
 # What happens if the user searches for a player that doesn't exist?
 @pytest.mark.asyncio
@@ -38,6 +45,7 @@ async def test_predict_error_branch_player_not_found(setup_cog, mock_interaction
     # Assert (Verify) that the bot sent the correct error message to the channel
     # Because we deferred first, we check followup.send instead of send!
     mock_interaction.followup.send.assert_any_call("⚠️ Could not find player Ghost #NA1 on NA1. Check spelling!")
+
 
 # What happens if the player exists, but isn't in a match?
 @pytest.mark.asyncio

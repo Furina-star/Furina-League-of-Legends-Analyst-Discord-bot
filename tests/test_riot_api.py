@@ -3,19 +3,25 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from riot_api import RiotAPIClient
 
 
-# The @pytest.mark.asyncio tells pytest that this test uses async/await
-@pytest.mark.asyncio
-async def test_get_puuid_mocked():
+@pytest.fixture
+def mock_client():
     # Set up a client with a fake API key
     client = RiotAPIClient(api_key="FAKE_KEY")
+    # 🗄️ MOCK CACHE: Prevent the test from writing to an actual SQLite file on your computer
+    client.cache = AsyncMock()
+    return client
 
+
+# The @pytest.mark.asyncio tells pytest that this test uses async/await
+@pytest.mark.asyncio
+async def test_get_puuid_mocked(mock_client):
     # Patch (Mock) the _fetch method so it never actually connects to the internet
-    with patch.object(client, '_fetch', new_callable=AsyncMock) as mock_fetch:
+    with patch.object(mock_client, '_fetch', new_callable=AsyncMock) as mock_fetch:
         # Tell the fake server exactly what JSON to return
         mock_fetch.return_value = {"puuid": "fake-puuid-12345"}
 
         # Run the function
-        result = await client.get_puuid("Hide on bush", "KR1")
+        result = await mock_client.get_puuid("Hide on bush", "KR1")
 
         # Assert (Verify) the results!
         assert result == "fake-puuid-12345"
@@ -23,21 +29,17 @@ async def test_get_puuid_mocked():
 
 
 @pytest.mark.asyncio
-async def test_get_champion_mastery_bot_bouncer():
-    client = RiotAPIClient(api_key="FAKE_KEY")
-
+async def test_get_champion_mastery_bot_bouncer(mock_client):
     # Test that passing 'None' (a bot) returns 0 mastery immediately without fetching
-    with patch.object(client, '_fetch', new_callable=AsyncMock) as mock_fetch:
-        result = await client.get_champion_mastery(None, 85)
+    with patch.object(mock_client, '_fetch', new_callable=AsyncMock) as mock_fetch:
+        result = await mock_client.get_champion_mastery(None, 85)
 
         assert result == 0
         mock_fetch.assert_not_called()  # It should have bounced before fetching!
 
 
 @pytest.mark.asyncio
-async def test_fetch_retry_behavior_on_5xx():
-    client = RiotAPIClient(api_key="FAKE_KEY")
-
+async def test_fetch_retry_behavior_on_5xx(mock_client):
     # Create fake responses
     error_response = MagicMock()
     error_response.status = 503  # Riot Server is dying!
@@ -57,7 +59,10 @@ async def test_fetch_retry_behavior_on_5xx():
     # This patches the aiohttp.ClientSession.get method to use our mock_get instead, simulating the server responses
     with patch('riot_api.aiohttp.ClientSession.get', new=mock_get):
         with patch('riot_api.asyncio.sleep', new_callable=AsyncMock) as mock_sleep:
-            result = await client._fetch("https://fake-url.com")
+            # We must mock the semaphore lock so it enters properly
+            mock_client._semaphore = AsyncMock()
+
+            result = await mock_client._fetch("https://fake-url.com")
 
             # Did it eventually return the success data?
             assert result == {"status": "success"}
