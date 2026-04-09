@@ -167,7 +167,7 @@ class DiscordBot(commands.Bot):
 
 if __name__ == "__main__":
     if not config.DISCORD_TOKEN or not config.RIOT_KEY:
-        sys.exit("Error: DISCORD_TOKEN and RIOT_KEY must be set in the .env file.")
+        sys.exit("Error: DISCORD_TOKEN and RIOT_API_KEY must be set in the .env file.")
 
     bot = DiscordBot()
 

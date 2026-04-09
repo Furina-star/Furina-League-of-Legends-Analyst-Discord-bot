@@ -194,7 +194,8 @@ class DraftCommands(commands.Cog):
             # Get PUUID
             puuid = await self.riot.get_puuid(game_name, tag_line, region_override=region)
             if not puuid:
-                await interaction.followup.send(f"⚠️ Could not find player {game_name} #{tag_line} on {server.upper()}. Check spelling!")
+                await interaction.followup.send(f"⚠️ Could not find player {game_name}#{tag_line} on {server.upper()}. Check spelling!",allowed_mentions=discord.AllowedMentions.none()
+                )
                 return
 
             # Get Live Match
@@ -367,9 +368,8 @@ class DraftCommands(commands.Cog):
             puuid = await self.riot.get_puuid(game_name, tag_line, region_override=region)
             if not puuid:
                 # Since we deferred above, we MUST use followup.send() from here on out!
-                await interaction.followup.send(f"⚠️ Could not find player {safe_name} #{tag_line} on {server.upper()}. Check spelling!")
+                await interaction.followup.send(f"⚠️ Could not find player {game_name}#{tag_line} on {server.upper()}. Check spelling!", allowed_mentions=discord.AllowedMentions.none())
                 return
-
             # This call out get_live_match function from RiotAPIClient Class in riot_api.py.
             match_data = await self.riot.get_live_match(puuid, platform_override=server)
             if not match_data:
@@ -387,7 +387,7 @@ class DraftCommands(commands.Cog):
             bot_entries, player_results = await self._fetch_enemy_data(match_data, enemy_team_id, server, region)
             embed = build_scout_embed(server, safe_name, bot_entries, player_results, self.ai.meta_db)
 
-            await interaction.followup.send(embed=embed)
+            await interaction.followup.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
 
         # Error for Riot API issues, like if the servers are down or something.
         except aiohttp.ClientError:
