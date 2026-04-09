@@ -130,6 +130,13 @@ class RiotAPIClient:
         url = f"https://{r}.api.riotgames.com/lol/match/v5/matches/{match_id}"
         return await self._fetch(url, cache_ttl=86400)
 
+    # Initiate Top Masteries API as a function
+    async def get_top_masteries(self, puuid: str, count: int = 3, platform_override: Optional[str] = None) -> list:
+        p = (platform_override or self.platform).lower()
+        url = f"https://{p}.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/{puuid}/top?count={count}"
+        data = await self._fetch(url, cache_ttl=3600)
+        return data if isinstance(data, list) else []
+
     # Helper function to format the rank string
     @staticmethod
     def _format_rank_str(queue_data):

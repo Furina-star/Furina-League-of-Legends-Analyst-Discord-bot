@@ -111,11 +111,14 @@ def _get_winrate_tags(rank: str) -> list:
     return tags
 
 # All what ifs to be used for build_scout_embed
-def _generate_player_tags(rank: str, mastery: int, is_duo: bool, meta_wr: float) -> str:
+def _generate_player_tags(rank: str, mastery: int, is_duo: bool, meta_wr: float, is_otp=False) -> str:
     tags = []
 
     if is_duo:
         tags.append("❤ **DUO**")
+
+    if is_otp:
+        tags.append("👑 **OTP**")
 
     # Append all the helper functions above
     tags.extend(_get_mastery_tags(mastery))
@@ -138,12 +141,12 @@ def build_scout_embed(server: str, game_name: str, bots: list, players: list, me
     for c_name in bots:
         embed.add_field(name=f"🤖 {c_name} (Bot)", value="No data available.", inline=False)
 
-    for c_name, riot_id, rank, mastery, is_duo in players:
+    for c_name, riot_id, rank, mastery, is_duo, keystone in players:
         meta_wr = meta_db.get(c_name, 0.50)
         tag_string = _generate_player_tags(rank, mastery, is_duo, meta_wr)
 
         embed.add_field(
-            name=f"⚔️ {c_name} - {riot_id}",
+            name=f"⚔️ {c_name} [{keystone}] - {riot_id}",
             value=f"**Rank:** {rank}\n**Mastery:** {mastery:,} pts{tag_string}",
             inline=False
         )

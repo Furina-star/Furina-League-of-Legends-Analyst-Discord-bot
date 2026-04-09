@@ -101,6 +101,7 @@ class DiscordBot(commands.Bot):
 
         self.meta_db = await asyncio.to_thread(load_json, config.META_PATH)
         self.role_db = await asyncio.to_thread(load_json, config.ROLES_PATH)
+        self.keystone_db = await asyncio.to_thread(load_json, config.KEYSTONE_RUNES_PATH)
         self.server_dict = config.SERVER_TO_REGION
 
         # Initialize APIs

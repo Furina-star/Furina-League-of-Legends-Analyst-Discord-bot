@@ -87,7 +87,7 @@ def sort_team_roles(team_participants, champ_dict, meta_db):
 
 # Cog Class
 class DraftCommands(commands.Cog):
-    def __init__(self, bot, riot_client, ai_system, meta_db, champ_dict, role_db):
+    def __init__(self, bot, riot_client, ai_system, meta_db, champ_dict, role_db, keystone_db):
         # Store everything here to use for the bot commands yeah yessir.
         self.bot = bot
         self.riot = riot_client
@@ -96,6 +96,7 @@ class DraftCommands(commands.Cog):
         self.champ_dict = champ_dict
         self.server_dict = bot.server_dict
         self.role_db = role_db
+        self.keystone_db = keystone_db
 
     # Autocomplete logic for Scout and Predict
     async def server_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
@@ -265,22 +266,44 @@ class DraftCommands(commands.Cog):
 
     # Getting the enemy information.
     # Helper number one for fetching enemy data
-    async def _fetch_single_enemy(self, c_name, riot_id, e_puuid, c_id, server, region):
-        mastery_task = self.riot.get_champion_mastery(e_puuid, c_id, platform_override=server)
+    async def _fetch_single_enemy(self, c_name, riot_id, e_puuid, c_id, server, region, perks):
+        # perks comes directly from participant['perks']['perkIds'][0] in the live match data
+        keystone_id = str(perks.get('perkIds', [0])[0]) if perks else "0"
+        keystone_name = self.keystone_db.get(keystone_id, "Unknown Rune")
+
         # Fetch their last 5 ranked matches (costs 1 API call per player)
+        mastery_task = self.riot.get_champion_mastery(e_puuid, c_id, platform_override=server)
         history_task = self.riot.get_match_history(e_puuid, count=5, region_override=region)
+
+        # Fetch their Top Masteries champions
+        top_mastery_task = self.riot.get_top_masteries(e_puuid, count=3, platform_override=server)
 
         async def get_rank():
             await asyncio.sleep(1.5)
             return await self.riot.get_summoner_rank(e_puuid, platform_override=server)
 
-        mastery, rank, history = await asyncio.gather(mastery_task, get_rank(), history_task)
+        mastery, rank, history, top_masteries = await asyncio.gather(
+            mastery_task, get_rank(), history_task, top_mastery_task
+        )
+
+        is_otp = False
+        if top_masteries:
+            top_champ_id = top_masteries[0].get('championId')
+            top_points = top_masteries[0].get('championPoints', 0)
+            playing_champ_id = c_id
+
+            if len(top_masteries) == 1:
+                # Only 1 champion ever played — the ultimate OTP
+                is_otp = top_champ_id == playing_champ_id
+            else:
+                second_points = top_masteries[1].get('championPoints', 1)
+                is_otp = top_champ_id == playing_champ_id and top_points >= (second_points * 3)
 
         # Safety fallback if history fails to load
         if not isinstance(history, list):
             history = []
 
-        return c_name, riot_id, rank, mastery, history
+        return c_name, riot_id, rank, mastery, history, keystone_name, is_otp
 
     # Helper number two for Duo detection
     @staticmethod
@@ -296,7 +319,7 @@ class DraftCommands(commands.Cog):
                 if p1_matches and p2_matches:
                     shared_games = set(p1_matches).intersection(p2_matches)
 
-                    if len(shared_games) >= 2:  # If they have 2 or more shared games in their recent history, they're probably duos
+                    if len(shared_games) >= 1:  # If they have 2 or more shared games in their recent history, they're probably duos
                         duos.add(p1_id)
                         duos.add(p2_id)
         return duos
@@ -316,8 +339,8 @@ class DraftCommands(commands.Cog):
                 else:
                     riot_id = p.get('riotId') or p.get('summonerName') or 'Unknown Player'
                     player_tasks.append(
-                        self._fetch_single_enemy(c_name, riot_id, e_puuid, p['championId'], server, region))
-
+                        self._fetch_single_enemy(c_name, riot_id, e_puuid, p['championId'], server, region, p.get('perks', {}))
+                    )
         # Wait for all players to finish fetching
         raw_results = await asyncio.gather(*player_tasks)
 
@@ -401,4 +424,4 @@ class DraftCommands(commands.Cog):
 
 # Setup Hook or something whatever this is called.
 async def setup(bot):
-    await bot.add_cog(DraftCommands(bot, bot.riot_client, bot.ai_system, bot.meta_db, bot.champ_dict, bot.role_db))
+    await bot.add_cog(DraftCommands(bot, bot.riot_client, bot.ai_system, bot.meta_db, bot.champ_dict, bot.role_db, bot.keystone_db))
