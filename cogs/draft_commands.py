@@ -189,13 +189,11 @@ class DraftCommands(commands.Cog):
 
         # Tell Discord to show the "Thinking..." status.
         await interaction.response.defer(thinking=True)
-        game_name = escape_mentions(game_name)
 
         try:
             # Get PUUID
             puuid = await self.riot.get_puuid(game_name, tag_line, region_override=region)
             if not puuid:
-                # Since we deferred above, we MUST use followup.send() from here on out!
                 await interaction.followup.send(f"⚠️ Could not find player {game_name} #{tag_line} on {server.upper()}. Check spelling!")
                 return
 
@@ -362,7 +360,6 @@ class DraftCommands(commands.Cog):
 
         # Tell Discord to show the "Thinking..." status.
         await interaction.response.defer(thinking=True)
-        game_name = escape_mentions(game_name)
 
         try:
             # This call out get_riot_puuid function from RiotAPIClient Class in riot_api.py.

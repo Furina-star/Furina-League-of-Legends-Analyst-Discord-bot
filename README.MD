@@ -4,13 +4,13 @@ A modular, object-oriented Discord bot powered by the Riot Games API and PyTorch
 
 ## Stack
 
-| | |
-|---|---|
-| Runtime | Python (Asyncio) |
-| ML Inference | PyTorch, Safetensors, Skops |
+|               |                             |
+|---------------|-----------------------------|
+| Runtime       | Python (Asyncio)            |
+| ML Inference  | PyTorch, Safetensors, Skops |
 | Bot framework | discord.py (Slash Commands) |
-| Caching | aiosqlite |
-| Data source | Riot Games API |
+| Caching       | aiosqlite                   |
+| Data source   | Riot Games API              |
 
 ## Features
 
@@ -69,12 +69,12 @@ python discord_bot.py
 
 Prefix: `/` (Slash Commands)
 
-| Command                           | Description |
-|-----------------------------------|---|
-| `/ help`                          | Displays the interactive help menu with button navigation |
-| `/ ping`                          | Checks bot latency, database status, and Riot API health |
+| Command                           | Description                                                                        |
+|-----------------------------------|------------------------------------------------------------------------------------|
+| `/ help`                          | Displays the interactive help menu                                                 |
+| `/ ping`                          | Checks bot latency, and status                                                     |
 | `/ predict <server> RiotName#Tag` | Runs the live draft through the PyTorch model and outputs win probability per side |
-| `/ scout <server> RiotName#Tag`   | Generates an enemy team dossier with ranks and champion mastery |
+| `/ scout <server> RiotName#Tag`   | Generates an enemy team dossier with ranks and champion mastery                    |
 
 ---
 

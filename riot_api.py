@@ -9,7 +9,7 @@ import random
 import logging
 from typing import Optional, Union, Dict, Any, List
 from urllib.parse import quote
-from utils.cache import RiotCache  # 🚨 Import our new Cache system!
+from utils.cache import RiotCache
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class RiotAPIClient:
         self.cache = RiotCache()
         self._semaphore = asyncio.Semaphore(15)
 
-        # Set up the database when the bot starts
+    # Set up the database when the bot starts
     async def setup_cache(self):
         await self.cache.setup()
 
@@ -37,8 +37,8 @@ class RiotAPIClient:
 
     # Close the session when the bot shuts down
     async def close(self):
-        if self._session and not self._session.closed:
-            await self._session.close()
+        if hasattr(self, 'cache') and self.cache is not None:
+            await self.cache.close()
 
     # This function handles the API calls at its maximum efficiency while respecting rate limits and caching results to minimize unnecessary calls.
     async def _fetch(self, url: str, max_retries: int = 3, cache_ttl: int = 0) -> Optional[
@@ -53,35 +53,36 @@ class RiotAPIClient:
             headers = {"X-Riot-Token": self.api_key}
             session = self._get_session()
 
-        for attempt in range(max_retries):
-            try:
-                async with session.get(url, headers=headers, timeout=10) as response:
-                    # 200 means its good other than that it's an error like 429 below which gives Rate Limit Exceeded
-                    if response.status == 200:
-                        data = await response.json()
-                        # 2. Save successful fetches to the cache for next time!
-                        if cache_ttl > 0:
-                            await self.cache.set(url, data, ttl_seconds=cache_ttl)
-                        return data
-                    # 429 means the API rate limit was exceeded, so we need to wait before retrying
-                    elif response.status == 429:
-                        retry_after = int(response.headers.get("Retry-After", 5))
-                        logger.warning(f"[RATE LIMIT] Waiting {retry_after}s... (Attempt {attempt + 1}/{max_retries})")
-                        await asyncio.sleep(retry_after)
-                    # Exponential backoff + Jitter for server errors
-                    elif response.status >= 500:
-                        sleep_time = (2 ** attempt) + random.uniform(0.1, 1.0)
-                        logger.warning(f"[SERVER ERROR {response.status}] Retrying in {sleep_time:.2f}s...")
-                        await asyncio.sleep(sleep_time)
-                    # This error is the API itself
-                    else:
-                        logger.error(f"[API ERROR {response.status}] Failed to fetch: {url}")
-                        return None
-            # Catch actual internet drops and timeouts!
-            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                sleep_time = (2 ** attempt) + random.uniform(0.1, 1.0)
-                logger.warning(f"[NETWORK ERROR] {e}. Retrying in {sleep_time:.2f}s...")
-                await asyncio.sleep(sleep_time)
+            for attempt in range(max_retries):
+                try:
+                    async with session.get(url, headers=headers, timeout=10) as response:
+                        # 200 means its good other than that it's an error like 429 below which gives Rate Limit Exceeded
+                        if response.status == 200:
+                            data = await response.json()
+                            # 2. Save successful fetches to the cache for next time!
+                            if cache_ttl > 0:
+                                await self.cache.set(url, data, ttl_seconds=cache_ttl)
+                            return data
+                        # 429 means the API rate limit was exceeded, so we need to wait before retrying
+                        elif response.status == 429:
+                            retry_after = int(response.headers.get("Retry-After", 5))
+                            logger.warning(f"[RATE LIMIT] Waiting {retry_after}s... (Attempt {attempt + 1}/{max_retries})")
+                            await asyncio.sleep(retry_after)
+                        # Exponential backoff + Jitter for server errors
+                        elif response.status >= 500:
+                            sleep_time = (2 ** attempt) + random.uniform(0.1, 1.0)
+                            logger.warning(f"[SERVER ERROR {response.status}] Retrying in {sleep_time:.2f}s...")
+                            await asyncio.sleep(sleep_time)
+                        # This error is the API itself
+                        else:
+                            logger.error(f"[API ERROR {response.status}] Failed to fetch: {url}")
+                            return None
+                        
+                # Catch actual internet drops and timeouts!
+                except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                    sleep_time = (2 ** attempt) + random.uniform(0.1, 1.0)
+                    logger.warning(f"[NETWORK ERROR] {e}. Retrying in {sleep_time:.2f}s...")
+                    await asyncio.sleep(sleep_time)
 
         logger.warning(f"[MAX RETRIES] Gave up on fetching: {url}")
         return None
