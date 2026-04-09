@@ -5,7 +5,8 @@ from sklearn.model_selection import train_test_split
 import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
-import joblib
+from safetensors.torch import save_file
+import skops.io as sio
 import matplotlib.pyplot as plt
 import requests
 import json
@@ -62,7 +63,8 @@ for col in text_cols:
     df[col] = df[col].apply(lambda x: x if x in le.classes_ else 'Unknown')
     df[col] = le.transform(df[col].astype(str))
 
-joblib.dump(le, "models/label_encoder.pkl")
+# Save LabelEncoder using skops
+sio.dump(le, "models/label_encoder.skops")
 num_unique_champions = len(le.classes_)
 
 x_champs = df[text_cols]
@@ -131,7 +133,8 @@ for epoch in range(num_epochs):
         best_val_loss = avg_val_loss
         patience_counter = 0
 
-        torch.save({'model_state_dict': model.state_dict(), 'num_champs': num_unique_champions},"models/Lol_draft_predictor.pth")
+        # Save PyTorch weights using safetensors
+        save_file(model.state_dict(), "models/Lol_draft_predictor.safetensors")
         print(f"Epoch [{epoch + 1}/{num_epochs}]  |  Train Loss: {avg_train_loss:.4f}  |  Val Loss: {avg_val_loss:.4f} ⭐ (New Best!)")
     else:
         patience_counter += 1

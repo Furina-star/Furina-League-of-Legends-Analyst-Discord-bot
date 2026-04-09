@@ -24,6 +24,12 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# Databases
+*.sqlite3
+*.db
+riot_cache.db
+data/riot_cache.db
+
 # ML and Data files
 # If its over 100mb yeah i can add it to gitignore
 # data/*.csv

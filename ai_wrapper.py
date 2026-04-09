@@ -4,8 +4,8 @@ This is where AI logic functions are stored, such as loading the model, preproce
 
 import torch
 import torch.nn as nn
-import skops.io as sio  # 🛡️ SECURE: Replaces joblib!
-from safetensors.torch import load_model  # 🛡️ SECURE: Replaces torch.load!
+import skops.io as sio
+from safetensors.torch import load_model
 import json
 from itertools import combinations
 import logging
@@ -63,15 +63,16 @@ def calculate_team_synergy(team_champs: List[str], synergy_matrix: Dict[str, Any
 class LeagueAI:
     # This function set up and load Label encoder and the model
     def __init__(self,
-                 model_path: str = "models/league_model.safetensors",
-                 encoder_path: str = "models/encoder.skops",
+                 model_path: str = "models/Lol_draft_predictor.safetensors",
+                 encoder_path: str = "models/label_encoder.skops",
                  synergy_path: str = config.SYNERGY_PATH,
                  meta_path: str = config.META_PATH):
 
         logger.info("Loading AI Model, Label Encoder, Synergy Matrix, and Meta DB...")
 
         # Load the Label encoder using skops (Blocks malicious code execution)
-        self.le = sio.load(encoder_path, trusted=True)
+        safe_types = sio.get_untrusted_types(file=encoder_path)
+        self.le = sio.load(encoder_path, trusted=safe_types)
 
         # Convert classes to a Python set once for O(1) lightning-fast lookups
         self.known_classes = set(self.le.classes_)
@@ -113,7 +114,7 @@ class LeagueAI:
         meta_list = [self.meta_db.get(champ, config.BASE_WINRATE) for champ in raw_champs]
 
         # Convert everything to tensors
-        x_tensor = torch.tensor([encoded_champs], dtype=torch.long)  # Notice the extra [] to make it a batch of 1
+        x_tensor = torch.from_numpy(encoded_champs).long().unsqueeze(0)
         synergy_tensor = torch.tensor([[blue_synergy, red_synergy]], dtype=torch.float32)
         meta_tensor = torch.tensor([meta_list], dtype=torch.float32)
 

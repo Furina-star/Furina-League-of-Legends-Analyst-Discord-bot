@@ -48,13 +48,10 @@ class RiotAPIClient:
             cached_data = await self.cache.get(url)
             if cached_data: return cached_data
 
-        # The bouncer 
+        # The bouncer
         async with self._semaphore:
             headers = {"X-Riot-Token": self.api_key}
             session = self._get_session()
-
-        headers = {"X-Riot-Token": self.api_key}
-        session = self._get_session()
 
         for attempt in range(max_retries):
             try:
