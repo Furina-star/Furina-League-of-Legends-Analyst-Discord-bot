@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 RIOT_KEY = os.getenv("RIOT_API_KEY")
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
+SENTRY_DSN = os.getenv("SENTRY_DSN")
 
 # The Server Dictionary for RIOT API
 SERVER_TO_REGION = {

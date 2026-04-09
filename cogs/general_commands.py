@@ -27,6 +27,7 @@ class GeneralCommands(commands.Cog):
         embed = build_help_embed()
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
+
 # Setup hook to load the Cog
 async def setup(bot):
     await bot.add_cog(GeneralCommands(bot))

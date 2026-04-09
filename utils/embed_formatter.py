@@ -68,11 +68,11 @@ def build_predict_embeds(blue_prob: float, red_prob: float,
 
 # Helper functions for _generate_player_tags
 # OTP and First timer detection
-def _get_mastery_tags(mastery: int) -> list:
+def _get_mastery_tags(mastery: int, is_otp: bool = False) -> list:
     if mastery >= 1000000:
-        return ["⚠️ **OTP WARNING**"]
+        return [] if is_otp else ["🦄 **OTP WARNING**"]
     if mastery >= 500000:
-        return ["🔸 **Main**"]
+        return ["🛡️ **Main**"]
     if mastery < 10000:
         return ["🔰 **First Time / Very New**"]
     return []
@@ -80,7 +80,7 @@ def _get_mastery_tags(mastery: int) -> list:
 # Meta slave and Troll detection
 def _get_meta_tags(meta_wr: float) -> list:
     if meta_wr >= 0.525:
-        return ["⭐ **Meta Abuser**"]
+        return ["🎯 **Meta Abuser**"]
     if meta_wr <= 0.48:
         return ["🤡 **Off-Meta / Troll**"]
     return []
@@ -91,11 +91,11 @@ def _get_winrate_tags(rank: str) -> list:
     tags = []
 
     # Smurf Detection
-    if any(win_rate in rank for win_rate in ["70.", "75.", "80.", "85.", "90."]) and "Unranked" not in rank:
+    if re.search(r"\b([789]\d)\.\d+%\s*WR", rank) and "Unranked" not in rank:
         tags.append("🕵️ **SUSPECTED SMURF**")
 
     # Tactical Winrate Analysis
-    match = re.search(r"([\d.]+)%\sWR\s\((\d+)\sgames\)", rank)
+    match = re.search(r"([\d.]+)%\sWR\*\*\s\((\d+)\sgames\)", rank)
     if match:
         wr = float(match.group(1))
         games = int(match.group(2))
@@ -111,19 +111,17 @@ def _get_winrate_tags(rank: str) -> list:
     return tags
 
 # All what ifs to be used for build_scout_embed
-def _generate_player_tags(rank: str, mastery: int, is_duo: bool, meta_wr: float, is_otp=False) -> str:
+def _generate_player_tags(rank: str, mastery: int, is_duo: bool, meta_wr: float, is_otp=False, is_autofilled=False) -> str:
     tags = []
 
-    if is_duo:
-        tags.append("❤ **DUO**")
-
-    if is_otp:
-        tags.append("👑 **OTP**")
+    if is_duo: tags.append("❤ **DUO**")
+    if is_otp: tags.append("👑 **TRUE OTP**")
+    if is_autofilled: tags.append("⚠️ **AUTOFILLED**")
 
     # Append all the helper functions above
-    tags.extend(_get_mastery_tags(mastery))
     tags.extend(_get_meta_tags(meta_wr))
     tags.extend(_get_winrate_tags(rank))
+    tags.extend(_get_mastery_tags(mastery, is_otp))
 
     # Join all tags into a single string, separated by " | ", and return it. If no tags, return an empty string.
     if tags:
@@ -141,12 +139,14 @@ def build_scout_embed(server: str, game_name: str, bots: list, players: list, me
     for c_name in bots:
         embed.add_field(name=f"🤖 {c_name} (Bot)", value="No data available.", inline=False)
 
-    for c_name, riot_id, rank, mastery, is_duo, keystone in players:
+    for c_name, riot_id, rank, mastery, is_duo, keystone, is_otp, is_autofilled in players:
         meta_wr = meta_db.get(c_name, 0.50)
-        tag_string = _generate_player_tags(rank, mastery, is_duo, meta_wr)
+        tag_string = _generate_player_tags(rank, mastery, is_duo, meta_wr, is_otp, is_autofilled)
+
+        keystone_display = f" [{keystone}]" if keystone != "None" else ""
 
         embed.add_field(
-            name=f"⚔️ {c_name} [{keystone}] - {riot_id}",
+            name=f"⚔️ {c_name}{keystone_display} - {riot_id}",
             value=f"**Rank:** {rank}\n**Mastery:** {mastery:,} pts{tag_string}",
             inline=False
         )

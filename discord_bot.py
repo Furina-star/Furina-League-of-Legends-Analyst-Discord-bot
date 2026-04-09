@@ -21,6 +21,7 @@ from utils.translator import DiscordTranslator
 import logging
 import traceback
 import config
+import sentry_sdk
 
 # This creates and print debugs logs properly.
 os.makedirs("logs", exist_ok=True)
@@ -33,6 +34,16 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+# Sentry.io setup for better logging
+Sentry = config.SENTRY_DSN
+if Sentry:
+    sentry_sdk.init(
+        dsn=Sentry,
+        # Set traces_sample_rate to 1.0 to capture 100% of errors for now
+        traces_sample_rate=1.0,
+    )
+    logger.info("Sentry Telemetry Online!")
 
 # Initiate Data Dragon dictionary API  as a function
 CACHE_FILE = "data/champion_cache.json"

@@ -85,6 +85,31 @@ def sort_team_roles(team_participants, champ_dict, meta_db):
 
     return roles
 
+# Autofill detection helper
+POSITION_TO_ROLE_KEY = {
+    "TOP": "KNOWN_TOPS",
+    "JUNGLE": None,  # Jungle is detected by Smite, not a pool
+    "MIDDLE": "KNOWN_MIDS",
+    "BOTTOM": "PURE_ADCS",
+    "UTILITY": "PURE_SUPPORTS"
+}
+
+def detect_autofill(live_position: str, top_masteries: list, role_db: dict, champ_dict: dict) -> bool:
+    if not live_position or not top_masteries:
+        return False
+
+    role_key = POSITION_TO_ROLE_KEY.get(live_position)
+    if not role_key:
+        return False  # Jungle — skip, can't reliably detect
+
+    role_pool = set(role_db.get(role_key, []))
+    if not role_pool:
+        return False  # Safety — if pool is empty, don't falsely flag
+
+    top_champ_names = {champ_dict.get(str(entry.get('championId')), '') for entry in top_masteries}
+
+    return not top_champ_names.intersection(role_pool)
+
 # Cog Class
 class DraftCommands(commands.Cog):
     def __init__(self, bot, riot_client, ai_system, meta_db, champ_dict, role_db, keystone_db):
@@ -266,10 +291,14 @@ class DraftCommands(commands.Cog):
 
     # Getting the enemy information.
     # Helper number one for fetching enemy data
-    async def _fetch_single_enemy(self, c_name, riot_id, e_puuid, c_id, server, region, perks):
-        # perks comes directly from participant['perks']['perkIds'][0] in the live match data
-        keystone_id = str(perks.get('perkIds', [0])[0]) if perks else "0"
-        keystone_name = self.keystone_db.get(keystone_id, "Unknown Rune")
+    async def _fetch_single_enemy(self, c_name, riot_id, e_puuid, c_id, server, region, perks, live_position):
+        # Check if Keystone was used
+        if perks and 'perkIds' in perks and len(perks['perkIds']) > 0:
+            # Perks comes directly from participant['perks']['perkIds'][0] in the live match data
+            keystone_id = str(perks['perkIds'][0])
+            keystone_name = self.keystone_db.get(keystone_id, "Unknown Rune")
+        else:
+            keystone_name = "None"
 
         # Fetch their last 5 ranked matches (costs 1 API call per player)
         mastery_task = self.riot.get_champion_mastery(e_puuid, c_id, platform_override=server)
@@ -285,6 +314,8 @@ class DraftCommands(commands.Cog):
         mastery, rank, history, top_masteries = await asyncio.gather(
             mastery_task, get_rank(), history_task, top_mastery_task
         )
+
+        is_autofilled = detect_autofill(live_position, top_masteries, self.role_db, self.champ_dict)
 
         is_otp = False
         if top_masteries:
@@ -303,7 +334,7 @@ class DraftCommands(commands.Cog):
         if not isinstance(history, list):
             history = []
 
-        return c_name, riot_id, rank, mastery, history, keystone_name, is_otp
+        return c_name, riot_id, rank, mastery, history, keystone_name, is_otp, is_autofilled
 
     # Helper number two for Duo detection
     @staticmethod
@@ -319,7 +350,7 @@ class DraftCommands(commands.Cog):
                 if p1_matches and p2_matches:
                     shared_games = set(p1_matches).intersection(p2_matches)
 
-                    if len(shared_games) >= 1:  # If they have 2 or more shared games in their recent history, they're probably duos
+                    if len(shared_games) >= 2:  # If they have 2 or more shared games in their recent history, they're probably duos
                         duos.add(p1_id)
                         duos.add(p2_id)
         return duos
@@ -338,8 +369,9 @@ class DraftCommands(commands.Cog):
                     bot_entries.append(c_name)
                 else:
                     riot_id = p.get('riotId') or p.get('summonerName') or 'Unknown Player'
+                    live_position = p.get('teamPosition', '')
                     player_tasks.append(
-                        self._fetch_single_enemy(c_name, riot_id, e_puuid, p['championId'], server, region, p.get('perks', {}))
+                        self._fetch_single_enemy(c_name, riot_id, e_puuid, p['championId'], server, region, p.get('perks', {}), live_position)
                     )
         # Wait for all players to finish fetching
         raw_results = await asyncio.gather(*player_tasks)
@@ -350,9 +382,9 @@ class DraftCommands(commands.Cog):
 
         # Build the final list to send to the embed formatter
         final_players = []
-        for c_name, riot_id, rank, mastery, _ in raw_results:
-            is_duo = riot_id in duo_set  # True if the Detective found them in the set
-            final_players.append((c_name, riot_id, rank, mastery, is_duo))
+        for c_name, riot_id, rank, mastery, _, keystone_name, is_otp, is_autofilled in raw_results:
+            is_duo = riot_id in duo_set
+            final_players.append((c_name, riot_id, rank, mastery, is_duo, keystone_name, is_otp, is_autofilled))
 
         return bot_entries, final_players
 
