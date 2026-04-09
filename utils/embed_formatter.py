@@ -66,6 +66,30 @@ def build_predict_embed(blue_prob: float, red_prob: float,
 
     return embed
 
+# All what ifs to be used for build_scout_embed
+def _generate_player_tags(rank: str, mastery: int, is_duo: bool) -> str:
+    tags = []
+
+    # Duo Detection Tag!
+    if is_duo:
+        tags.append("❤ **DUO**")
+
+    # OTP and First Timer tag
+    if mastery >= 1000000:
+        tags.append("⚠️ **OTP WARNING**")
+    elif mastery >= 500000:
+        tags.append("🔸 **Main**")
+    elif mastery < 10000:
+        tags.append("🔰 **First Time / Very New**")
+
+    # Smurf Detection Tag
+    if any(win_rate in rank for win_rate in ["70.", "75.", "80.", "85.", "90."]) and "Unranked" not in rank:
+        tags.append("🕵️ **SUSPECTED SMURF**")
+
+    if tags:
+        return f"\n**Tags:** {' | '.join(tags)}"
+    return ""
+
 # For scout command in cogs
 def build_scout_embed(server: str, game_name: str, bots: List[str], players: List[tuple]) -> discord.Embed:
     embed = discord.Embed(
@@ -74,13 +98,16 @@ def build_scout_embed(server: str, game_name: str, bots: List[str], players: Lis
         color=discord.Color.dark_purple()
     )
 
-    # Add any bots to the embed
     for c_name in bots:
         embed.add_field(name=f"🤖 {c_name} (Bot)", value="No data available.", inline=False)
 
-    # Add the real players to the embed
-    for c_name, riot_id, rank, mastery in players:
-        embed.add_field(name=f"⚔️ {c_name} - {riot_id}",
-                        value=f"**Rank:** {rank}\n**Mastery:** {mastery:,} pts", inline=False)
+    for c_name, riot_id, rank, mastery, is_duo in players:
+        tag_string = _generate_player_tags(rank, mastery, is_duo)
+
+        embed.add_field(
+            name=f"⚔️ {c_name} - {riot_id}",
+            value=f"**Rank:** {rank}\n**Mastery:** {mastery:,} pts{tag_string}",
+            inline=False
+        )
 
     return embed

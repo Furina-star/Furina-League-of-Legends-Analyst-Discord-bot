@@ -114,9 +114,13 @@ class RiotAPIClient:
         lp = queue_data.get('leaguePoints', 0)
         wins = queue_data.get('wins', 0)
         losses = queue_data.get('losses', 0)
+        hot_streak = queue_data.get('hot_streak', False)
         total_games = wins + losses
 
-        base_str = f"{tier} {rank} ({lp} LP)"
+        # Adding a fire emoji for players on a win streak
+        streak_icon = " 🔥 (Hot Streak)" if hot_streak else ""
+
+        base_str = f"{tier} {rank} ({lp} LP){streak_icon}"
         if total_games > 0:
             winrate = (wins / total_games) * 100
             return f"{base_str} | **{winrate:.1f}% WR** ({total_games} games)"

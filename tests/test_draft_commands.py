@@ -10,7 +10,7 @@ def setup_cog():
     mock_ai = MagicMock()
 
     # Initialize the Cog with our fake systems and empty dictionaries
-    cog = DraftCommands(mock_bot, mock_riot, mock_ai, meta_db={}, champ_dict={})
+    cog = DraftCommands(mock_bot, mock_riot, mock_ai, meta_db={}, champ_dict={}, role_db={})
     cog.server_dict = {"na1": "americas"}
     return cog, mock_riot, mock_ai
 

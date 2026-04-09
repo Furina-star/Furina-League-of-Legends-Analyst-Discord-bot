@@ -127,15 +127,10 @@ class DraftCommands(commands.Cog):
 
     # Fetches mastery and rank concurrently for a team.
     async def _fetch_team_stats(self, players, server):
-        async def fetch_rank_safe(puuid, sid):
-            if not sid:
-                sid = await self.riot.get_summoner_id(puuid, platform_override=server)
+        async def fetch_rank_safe(puuid):
+            return await self.riot.get_summoner_rank(puuid, platform_override=server)
 
-            if sid:
-                return await self.riot.get_summoner_rank(sid, platform_override=server)
-            return "Unranked"
-
-        wr_tasks = [fetch_rank_safe(puuid, sid) for puuid, sid, _ in players]
+        wr_tasks = [fetch_rank_safe(puuid) for puuid, _, _ in players]
         mastery_tasks = [self.riot.get_champion_mastery(puuid, c_id, platform_override=server) for puuid, _, c_id in players]
 
         wr_results = await asyncio.gather(*wr_tasks)
@@ -247,38 +242,74 @@ class DraftCommands(commands.Cog):
                 await ctx.send("An unexpected error occurred while analyzing this match.")
 
     # Getting the enemy information.
-    # Initiate Dossier Builder as a function
-    async def _fetch_enemy_data(self, match_data, enemy_team_id, server):
-        # Mini helper function to fetch a single player's data concurrently
-        async def fetch_player_data(c_name, riot_id, e_puuid, c_id):
-            mastery_task = self.riot.get_champion_mastery(e_puuid, c_id, platform_override=server)
 
-            # Helper to safely grab rank, checking summoner ID if needed
-            async def get_rank():
-                await asyncio.sleep(1.5)
-                return await self.riot.get_summoner_rank(e_puuid, platform_override=server)
+    # Helper number one for fetching enemy data
+    async def _fetch_single_enemy(self, c_name, riot_id, e_puuid, c_id, server, region):
+        mastery_task = self.riot.get_champion_mastery(e_puuid, c_id, platform_override=server)
+        # Fetch their last 5 ranked matches (costs 1 API call per player)
+        history_task = self.riot.get_match_history(e_puuid, count=5, region_override=region)
 
-            mastery, rank = await asyncio.gather(mastery_task, get_rank())
-            return c_name, riot_id, rank, mastery
+        async def get_rank():
+            await asyncio.sleep(1.5)
+            return await self.riot.get_summoner_rank(e_puuid, platform_override=server)
 
-        tasks = []
+        mastery, rank, history = await asyncio.gather(mastery_task, get_rank(), history_task)
+
+        # Safety fallback if history fails to load
+        if not isinstance(history, list):
+            history = []
+
+        return c_name, riot_id, rank, mastery, history
+
+    # Helper number two for Duo detection
+    def _find_duos(self, player_histories: list) -> set:
+        duos = set()
+        # Compare every player's match history against every other player's history
+        for i in range(len(player_histories)):
+            for j in range(i + 1, len(player_histories)):
+                p1_id, p1_matches = player_histories[i]
+                p2_id, p2_matches = player_histories[j]
+
+                # If the lists intersect (share a Match ID), they're playing together lol
+                if p1_matches and p2_matches:
+                    shared_games = set(p1_matches).intersection(p2_matches)
+
+                    if len(shared_games) >= 2:  # If they have 2 or more shared games in their recent history, they're probably duos
+                        duos.add(p1_id)
+                        duos.add(p2_id)
+        return duos
+
+    # Initiate fetching enemy data as a function, this is where we get the mastery, rank, and match history for each enemy player, and also check if any of them are duos.
+    async def _fetch_enemy_data(self, match_data, enemy_team_id, server, region):
         bot_entries = []
+        player_tasks = []
 
         for p in match_data['participants']:
             if p['teamId'] == enemy_team_id:
+                c_name = self.champ_dict.get(str(p['championId']), 'Unknown')
                 e_puuid = p.get('puuid')
-                riot_id = p.get('riotId') or p.get('summonerName') or 'Unknown Player'
-                c_id = p['championId']
-                c_name = self.champ_dict.get(str(c_id), 'Unknown')
 
                 if p.get('bot', False) or not e_puuid:
                     bot_entries.append(c_name)
                 else:
-                    tasks.append(fetch_player_data(c_name, riot_id, e_puuid, c_id))
+                    riot_id = p.get('riotId') or p.get('summonerName') or 'Unknown Player'
+                    player_tasks.append(
+                        self._fetch_single_enemy(c_name, riot_id, e_puuid, p['championId'], server, region))
 
-        results = await asyncio.gather(*tasks)
+        # Wait for all players to finish fetching
+        raw_results = await asyncio.gather(*player_tasks)
 
-        return bot_entries, results
+        # Extract just the IDs and Histories to pass to our Duo Detective
+        histories = [(res[1], res[4]) for res in raw_results]
+        duo_set = self._find_duos(histories)
+
+        # Build the final list to send to the embed formatter
+        final_players = []
+        for c_name, riot_id, rank, mastery, _ in raw_results:
+            is_duo = riot_id in duo_set  # True if the Detective found them in the set
+            final_players.append((c_name, riot_id, rank, mastery, is_duo))
+
+        return bot_entries, final_players
 
     # This part checks what type of bs the enemy team is running
     @commands.command()
@@ -325,7 +356,7 @@ class DraftCommands(commands.Cog):
                 enemy_team_id = 200 if user_team == 100 else 100
 
                 # Building the Discord Embed
-                bot_entries, player_results = await self._fetch_enemy_data(match_data, enemy_team_id, server)
+                bot_entries, player_results = await self._fetch_enemy_data(match_data, enemy_team_id, server, region)
                 embed = build_scout_embed(server, game_name, bot_entries, player_results)
                 await ctx.send(embed=embed)
 
