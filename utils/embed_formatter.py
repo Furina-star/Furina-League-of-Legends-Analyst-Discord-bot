@@ -7,31 +7,29 @@ import discord
 from typing import List
 
 # For help commands in cogs
+# For help commands in cogs
 def build_help_embed() -> discord.Embed:
-    
     embed = discord.Embed(
         title="💧 Furina League Analyst Bot - Help Menu",
-        description="I am Furina, your personal Solo Queue analyst! Here is how to use my commands:\n"
-                    "Prefix: `f` or `furina` (e.g., `f ping`, `f predict`)",
+        description="I am Furina, your personal Solo Queue analyst! I now use **Slash Commands**:\n"
+                    "Just type `/` and select my commands from the menu!",
         color=discord.Color.blue()
     )
     embed.add_field(
-        name="🏓 `f ping`",
-        value="Checks if Furina is online.",
+        name="🏓 `/ping`",
+        value="Checks my current latency to Discord.",
         inline=False
     )
     embed.add_field(
-        name="⚔️ `f predict`",
+        name="⚔️ `/predict`",
         value="Calculates win probability for a live match.\n"
-              "**Format:** `f predict <server> Name#Tag`\n"
-              "**Example:** `f predict KR Hide on bush#KR1`",
+              "**Requires:** Server and Riot ID",
         inline=False
     )
     embed.add_field(
-        name="🕵️ `f scout`",
+        name="🕵️ `/scout`",
         value="Builds an enemy dossier for a live match.\n"
-              "**Format:** `f scout <server> Name#Tag`\n"
-              "**Example:** `f scout NA1 Doublelift#NA1`",
+              "**Requires:** Server and Riot ID",
         inline=False
     )
     embed.set_footer(

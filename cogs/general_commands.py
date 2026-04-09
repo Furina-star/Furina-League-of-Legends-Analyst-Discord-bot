@@ -6,6 +6,7 @@ commands that are common between Discord Bots.
 
 import discord
 from discord.ext import commands
+from discord import app_commands
 
 from utils.embed_formatter import build_help_embed
 
@@ -14,17 +15,17 @@ class GeneralCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command()
-    @commands.cooldown(1, 1, commands.BucketType.user)
-    async def ping(self, ctx):
-        await ctx.send("I'm online and ready to analyze!")
+    @app_commands.command(name="ping", description="Checks if Furina is online and functioning.")
+    async def ping(self, interaction: discord.Interaction):
+        # Calculate the latency in milliseconds
+        latency = round(self.bot.latency * 1000)
+        await interaction.response.send_message(f"I'm online and ready to analyze! **Latency: {latency}ms**.")
 
-    @commands.command(name="help")
-    @commands.cooldown(1, 1, commands.BucketType.user)
-    async def custom_help(self, ctx):
+    @app_commands.command(name="help", description="Displays the Furina League Analyst help menu.")
+    async def help_command(self, interaction: discord.Interaction):
+        from utils.embed_formatter import build_help_embed
         embed = build_help_embed()
-
-        await ctx.send(embed=embed)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 # Setup hook to load the Cog
 async def setup(bot):

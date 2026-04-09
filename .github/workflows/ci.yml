@@ -27,3 +27,8 @@ jobs:
     - name: Run Pytest
       run: |
         python -m pytest
+
+    - name: Run Bandit Security Scanner
+      run: |
+        pip install bandit
+        bandit -r . -x ./tests -lll
