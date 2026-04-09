@@ -377,7 +377,7 @@ class DraftCommands(commands.Cog):
 
             # Building the Discord Embed
             bot_entries, player_results = await self._fetch_enemy_data(match_data, enemy_team_id, server, region)
-            embed = build_scout_embed(server, game_name, bot_entries, player_results)
+            embed = build_scout_embed(server, game_name, bot_entries, player_results, self.ai.meta_db)
 
             await interaction.followup.send(embed=embed)
 

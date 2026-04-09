@@ -13,10 +13,10 @@ A modular, object-oriented Discord bot powered by the Riot Games API and PyTorch
 
 ## Features
 
-### `f predict` — AI match prediction
+### `/ predict` — AI match prediction
 Evaluates a live 5v5 draft using a trained PyTorch neural network and outputs win probability for both blue and red side.
 
-### `f scout` — Live scouting dossier
+### `/ scout` — Live scouting dossier
 Detects which team the user is on and pulls champion mastery and Solo/Duo queue ranks for every enemy player.
 
 ## Installation
@@ -57,14 +57,14 @@ python discord_bot.py
 
 ## Command reference
 
-Prefix: `f ` or `furina `
+Prefix: `/`
 
 | Command                           | Description |
 |-----------------------------------|---|
-| `f help`                          | Displays the interactive help menu |
-| `f ping`                          | Checks bot latency and online status |
-| `f predict <server> RiotName#Tag` | Runs the live draft through the PyTorch model and outputs win probability per side |
-| `f scout <server> RiotName#Tag`   | Generates an enemy team dossier with ranks and champion mastery |
+| `/ help`                          | Displays the interactive help menu |
+| `/ ping`                          | Checks bot latency and online status |
+| `/ predict <server> RiotName#Tag` | Runs the live draft through the PyTorch model and outputs win probability per side |
+| `/ scout <server> RiotName#Tag`   | Generates an enemy team dossier with ranks and champion mastery |
 
 ---
 
