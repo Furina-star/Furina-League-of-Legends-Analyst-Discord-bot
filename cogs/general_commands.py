@@ -7,9 +7,7 @@ commands that are common between Discord Bots.
 import discord
 from discord.ext import commands
 from discord import app_commands
-
 from utils.embed_formatter import build_help_embed
-
 
 class GeneralCommands(commands.Cog):
     def __init__(self, bot):
@@ -23,7 +21,6 @@ class GeneralCommands(commands.Cog):
 
     @app_commands.command(name="help", description="Displays the Furina League Analyst help menu.")
     async def help_command(self, interaction: discord.Interaction):
-        from utils.embed_formatter import build_help_embed
         embed = build_help_embed()
         await interaction.response.send_message(embed=embed, ephemeral=True)
 

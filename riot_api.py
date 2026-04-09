@@ -10,9 +10,9 @@ import logging
 from typing import Optional, Union, Dict, Any, List
 from urllib.parse import quote
 from utils.cache import RiotCache
+from utils.parsers import parse_winrate, find_duos, detect_autofill
 
 logger = logging.getLogger(__name__)
-
 
 class RiotAPIClient:
     # This sill goofy ass remembers the key and regions
@@ -101,7 +101,7 @@ class RiotAPIClient:
         return None
 
     # Initiate Live Match API as a function
-    async def get_live_match(self, puuid: str, platform_override: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    async def get_live_match(self, puuid: str, platform_override: Optional[str] = None) -> dict[str, Any] | list[Any] | None:
         p = platform_override or self.platform
         url = f"https://{p}.api.riotgames.com/lol/spectator/v5/active-games/by-summoner/{puuid}"
         return await self._fetch(url, cache_ttl=0)
@@ -182,3 +182,104 @@ class RiotAPIClient:
             results.append(ranks_dict['Flex'])
 
         return "\n".join(results) if results else "Unranked"
+
+    # Fetches mastery and rank concurrently for a team.
+    async def _fetch_team_stats(self, players, server):
+        async def fetch_rank_safe(puuid):
+            return await self.get_summoner_rank(puuid, platform_override=server)
+
+        wr_tasks = [fetch_rank_safe(puuid) for puuid, _, _ in players]
+        mastery_tasks = [self.get_champion_mastery(puuid, c_id, platform_override=server) for puuid, _, c_id in players]
+
+        wr_results = await asyncio.gather(*wr_tasks)
+
+        # Pause for exactly 1 second to let Riot's 20-per-second limit reset
+        await asyncio.sleep(1.0)
+
+        masteries = await asyncio.gather(*mastery_tasks)
+
+        winrates = [parse_winrate(res) for res in wr_results]
+        avg_wr = sum(winrates) / len(winrates) if winrates else 50.0
+
+        return winrates, masteries, avg_wr
+
+    # Helper number one for fetching enemy data
+    async def _fetch_single_enemy(self, c_name, riot_id, e_puuid, c_id, server, region, perks, live_position, keystone_db, role_db, champ_dict):
+        # Check if Keystone was used
+        if perks and 'perkIds' in perks and len(perks['perkIds']) > 0:
+            # Perks comes directly from participant['perks']['perkIds'][0] in the live match data
+            keystone_id = str(perks['perkIds'][0])
+            keystone_name = keystone_db.get(keystone_id, "Unknown Rune")
+        else:
+            keystone_name = "None"
+
+        # Fetch their last 5 ranked matches (costs 1 API call per player)
+        mastery_task = self.get_champion_mastery(e_puuid, c_id, platform_override=server)
+        history_task = self.get_match_history(e_puuid, count=5, region_override=region)
+
+        # Fetch their Top Masteries champions
+        top_mastery_task = self.get_top_masteries(e_puuid, count=3, platform_override=server)
+
+        async def get_rank():
+            await asyncio.sleep(1.5)
+            return await self.get_summoner_rank(e_puuid, platform_override=server)
+
+        mastery, rank, history, top_masteries = await asyncio.gather(
+            mastery_task, get_rank(), history_task, top_mastery_task
+        )
+
+        is_autofilled = detect_autofill(live_position, top_masteries, role_db, champ_dict)
+
+        is_otp = False
+        if top_masteries:
+            top_champ_id = top_masteries[0].get('championId')
+            top_points = top_masteries[0].get('championPoints', 0)
+            playing_champ_id = c_id
+
+            if len(top_masteries) == 1:
+                # Only 1 champion ever played — the ultimate OTP
+                is_otp = top_champ_id == playing_champ_id
+            else:
+                second_points = top_masteries[1].get('championPoints', 1)
+                is_otp = top_champ_id == playing_champ_id and top_points >= (second_points * 3)
+
+        # Safety fallback if history fails to load
+        if not isinstance(history, list):
+            history = []
+
+        return c_name, riot_id, rank, mastery, history, keystone_name, is_otp, is_autofilled
+
+    # Initiate fetching enemy data as a function, this is where we get the mastery, rank, and match history for each enemy player, and also check if any of them are duos.
+    async def _fetch_enemy_data(self, match_data, enemy_team_id, server, region, champ_dict, keystone_db, role_db):
+        bot_entries = []
+        player_tasks = []
+
+        for p in match_data['participants']:
+            if p['teamId'] == enemy_team_id:
+                c_name = champ_dict.get(str(p['championId']), 'Unknown')
+                e_puuid = p.get('puuid')
+
+                if p.get('bot', False) or not e_puuid:
+                    bot_entries.append(c_name)
+                else:
+                    riot_id = p.get('riotId') or p.get('summonerName') or 'Unknown Player'
+                    live_position = p.get('teamPosition', '')
+                    player_tasks.append(
+                        self._fetch_single_enemy(c_name, riot_id, e_puuid, p['championId'], server, region,
+                                                 p.get('perks', {}), live_position, keystone_db, role_db, champ_dict)
+                    )
+
+        # Wait for all players to finish fetching
+        raw_results = await asyncio.gather(*player_tasks)
+
+        # Extract just the IDs and Histories to pass to our Duo Detective
+        histories = [(res[1], res[4]) for res in raw_results]
+        duo_set = find_duos(histories)
+
+        # Build the final list to send to the embed formatter
+        final_players = []
+        for c_name, riot_id, rank, mastery, _, keystone_name, is_otp, is_autofilled in raw_results:
+            is_duo = riot_id in duo_set
+            final_players.append((c_name, riot_id, rank, mastery, is_duo, keystone_name, is_otp, is_autofilled))
+
+        return bot_entries, final_players

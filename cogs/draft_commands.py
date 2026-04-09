@@ -5,110 +5,17 @@ commands that analyze the live game, predict the win condition, and scout the en
 """
 import aiohttp
 import discord
+from discord.app_commands import Choice
 from discord.ext import commands
 from discord import app_commands
-import asyncio
-import re
 import logging
 from utils.embed_formatter import build_predict_embeds, build_scout_embed
 from utils.views import PredictView
 from discord.utils import escape_mentions
+from utils.parsers import parse_riot_id, sort_team_roles, format_team_display
 
 # Get the logging system
 logger = logging.getLogger(__name__)
-
-# Initiate Riot ID Parser as a function.
-# this is to prevent the user from formatting it wrong, for example they might type "Hide on bush KR1" instead of "Hide on bush#KR1".
-def parse_riot_id(full_riot_id: str):
-    if len(full_riot_id) > 22:  # 16 (name) + 1 (#) + 5 (tag)
-        return None, None
-    
-    if '#' in full_riot_id:
-        game_name, tag_line = full_riot_id.split('#', 1)
-    else:
-        parts = full_riot_id.rsplit(' ', 1)
-        if len(parts) == 2:
-            game_name, tag_line = parts[0], parts[1]
-        else:
-            return None, None # Returns None if they formatted it completely wrong
-
-    return game_name.strip(), tag_line.strip()
-
-# Initiate Winrate as a function
-def parse_winrate(rank_string):
-    if not rank_string or "Unranked" in rank_string:
-        return 50.0 # If unranked or missing, assume an average 50% player
-
-    # Searches for numbers directly followed by "% WR"
-    match = re.search(r"([\d.]+)%\sWR", rank_string)
-    if match:
-        return float(match.group(1))
-    return 50.0
-
-# Initiate Role Sorter as a function.
-def _assign_role_from_pool(roles, unassigned, role_idx, db_key, meta_db):
-    if roles[role_idx] is not None:
-        return
-    pool = meta_db.get(db_key, set())
-    for i, champ in enumerate(unassigned):
-        if champ in pool:
-            roles[role_idx] = champ
-            unassigned.pop(i)
-            return
-
-# Sort Team Composition by role, not by pick
-def sort_team_roles(team_participants, champ_dict, meta_db):
-    roles = [None] * 5
-    unassigned = []
-
-    for player in team_participants:
-        champ_name = champ_dict.get(str(player['championId']), "Unknown")
-        if roles[1] is None and 11 in (player.get('spell1Id'), player.get('spell2Id')):
-            roles[1] = champ_name
-        else:
-            unassigned.append(champ_name)
-
-    # Use the new external helper instead of a nested function
-    _assign_role_from_pool(roles, unassigned, 3, "PURE_ADCS", meta_db)
-    _assign_role_from_pool(roles, unassigned, 4, "PURE_SUPPORTS", meta_db)
-    _assign_role_from_pool(roles, unassigned, 3, "FLEX_BOTS", meta_db)
-    _assign_role_from_pool(roles, unassigned, 4, "FLEX_SUPPORTS", meta_db)
-    _assign_role_from_pool(roles, unassigned, 2, "KNOWN_MIDS", meta_db)
-    _assign_role_from_pool(roles, unassigned, 0, "KNOWN_TOPS", meta_db)
-
-    for i in range(5):
-        if roles[i] is None and unassigned:
-            roles[i] = unassigned.pop(0)
-
-    if None in roles or unassigned:
-        return [champ_dict.get(str(p['championId']), "Unknown") for p in team_participants]
-
-    return roles
-
-# Autofill detection helper
-POSITION_TO_ROLE_KEY = {
-    "TOP": "KNOWN_TOPS",
-    "JUNGLE": None,  # Jungle is detected by Smite, not a pool
-    "MIDDLE": "KNOWN_MIDS",
-    "BOTTOM": "PURE_ADCS",
-    "UTILITY": "PURE_SUPPORTS"
-}
-
-def detect_autofill(live_position: str, top_masteries: list, role_db: dict, champ_dict: dict) -> bool:
-    if not live_position or not top_masteries:
-        return False
-
-    role_key = POSITION_TO_ROLE_KEY.get(live_position)
-    if not role_key:
-        return False  # Jungle — skip, can't reliably detect
-
-    role_pool = set(role_db.get(role_key, []))
-    if not role_pool:
-        return False  # Safety — if pool is empty, don't falsely flag
-
-    top_champ_names = {champ_dict.get(str(entry.get('championId')), '') for entry in top_masteries}
-
-    return not top_champ_names.intersection(role_pool)
 
 # Cog Class
 class DraftCommands(commands.Cog):
@@ -124,7 +31,7 @@ class DraftCommands(commands.Cog):
         self.keystone_db = keystone_db
 
     # Autocomplete logic for Scout and Predict
-    async def server_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    async def server_autocomplete(self, interaction: discord.Interaction, current: str) -> list[Choice[str | int | float]]:
 
         # Get the keys from server dictionary
         servers = list(self.server_dict.keys())
@@ -136,57 +43,7 @@ class DraftCommands(commands.Cog):
 
         return choices[:25]
 
-    # Initiate the ban logic as a function
-    def _extract_bans(self, match_data):
-        blue_bans, red_bans = ["None"] * 5, ["None"] * 5
-        b_count, r_count = 0, 0
-        for ban in match_data.get('bannedChampions', []):
-            c_name = self.champ_dict.get(str(ban['championId']), "None")
-            if ban['teamId'] == 100 and b_count < 5:
-                blue_bans[b_count] = c_name
-                b_count += 1
-            elif ban['teamId'] == 200 and r_count < 5:
-                red_bans[r_count] = c_name
-                r_count += 1
-        return blue_bans, red_bans
-
-    # Initiate the checking logic as a function
-    def _check_if_bot(self, champ_name, raw_team):
-        for p in raw_team:
-            if self.champ_dict.get(str(p['championId']), "Unknown") == champ_name:
-                return p.get('bot', False) or not p.get('puuid')
-        return False
-
     # Getting the Live game command.
-    # Formats the team display strings.
-    def _format_team_display(self, team_picks, raw_team):
-        display = []
-        for c in team_picks:
-            meta_wr = self.ai.meta_db.get(c, 0.5000) * 100
-            bot_tag = "🤖 " if self._check_if_bot(c, raw_team) else ""
-            display.append(f"{bot_tag}{c} `[{meta_wr:.1f}%]`")
-        return display
-
-    # Fetches mastery and rank concurrently for a team.
-    async def _fetch_team_stats(self, players, server):
-        async def fetch_rank_safe(puuid):
-            return await self.riot.get_summoner_rank(puuid, platform_override=server)
-
-        wr_tasks = [fetch_rank_safe(puuid) for puuid, _, _ in players]
-        mastery_tasks = [self.riot.get_champion_mastery(puuid, c_id, platform_override=server) for puuid, _, c_id in players]
-
-        wr_results = await asyncio.gather(*wr_tasks)
-
-        # Pause for exactly 1 second to let Riot's 20-per-second limit reset
-        await asyncio.sleep(1.0)
-
-        masteries = await asyncio.gather(*mastery_tasks)
-
-        winrates = [parse_winrate(res) for res in wr_results]
-        avg_wr = sum(winrates) / len(winrates) if winrates else 50.0
-
-        return winrates, masteries, avg_wr
-
     # Predict the win condition before the game starts
     @app_commands.command(name="predict", description="Calculates win probability for a live match.")
     @app_commands.describe(
@@ -242,8 +99,8 @@ class DraftCommands(commands.Cog):
                 return
 
             # Use our new helper to format the display!
-            blue_display = self._format_team_display(blue_picks, raw_blue_team)
-            red_display = self._format_team_display(red_picks, raw_red_team)
+            blue_display = format_team_display(blue_picks, raw_blue_team, self.meta_db, self.champ_dict)
+            red_display = format_team_display(red_picks, raw_red_team, self.meta_db, self.champ_dict)
 
             # Get the Champion picks and set them in order
             draft_dict = {
@@ -261,8 +118,8 @@ class DraftCommands(commands.Cog):
             red_players = [(p['puuid'], p.get('summonerId'), p['championId']) for p in raw_red_team]
 
             # Use our new helper to do the heavy asynchronous lifting!
-            blue_winrates, blue_masteries, avg_blue_wr = await self._fetch_team_stats(blue_players, server)
-            red_winrates, red_masteries, avg_red_wr = await self._fetch_team_stats(red_players, server)
+            blue_winrates, blue_masteries, avg_blue_wr = await self.riot._fetch_team_stats(blue_players, server)
+            red_winrates, red_masteries, avg_red_wr = await self.riot._fetch_team_stats(red_players, server)
 
             # Pass everything into the Hybrid Algorithm
             final_blue_prob, final_red_prob = self.ai.apply_hybrid_algorithm(
@@ -290,104 +147,6 @@ class DraftCommands(commands.Cog):
             await interaction.followup.send("Riot returned unexpected match data.")
 
     # Getting the enemy information.
-    # Helper number one for fetching enemy data
-    async def _fetch_single_enemy(self, c_name, riot_id, e_puuid, c_id, server, region, perks, live_position):
-        # Check if Keystone was used
-        if perks and 'perkIds' in perks and len(perks['perkIds']) > 0:
-            # Perks comes directly from participant['perks']['perkIds'][0] in the live match data
-            keystone_id = str(perks['perkIds'][0])
-            keystone_name = self.keystone_db.get(keystone_id, "Unknown Rune")
-        else:
-            keystone_name = "None"
-
-        # Fetch their last 5 ranked matches (costs 1 API call per player)
-        mastery_task = self.riot.get_champion_mastery(e_puuid, c_id, platform_override=server)
-        history_task = self.riot.get_match_history(e_puuid, count=5, region_override=region)
-
-        # Fetch their Top Masteries champions
-        top_mastery_task = self.riot.get_top_masteries(e_puuid, count=3, platform_override=server)
-
-        async def get_rank():
-            await asyncio.sleep(1.5)
-            return await self.riot.get_summoner_rank(e_puuid, platform_override=server)
-
-        mastery, rank, history, top_masteries = await asyncio.gather(
-            mastery_task, get_rank(), history_task, top_mastery_task
-        )
-
-        is_autofilled = detect_autofill(live_position, top_masteries, self.role_db, self.champ_dict)
-
-        is_otp = False
-        if top_masteries:
-            top_champ_id = top_masteries[0].get('championId')
-            top_points = top_masteries[0].get('championPoints', 0)
-            playing_champ_id = c_id
-
-            if len(top_masteries) == 1:
-                # Only 1 champion ever played — the ultimate OTP
-                is_otp = top_champ_id == playing_champ_id
-            else:
-                second_points = top_masteries[1].get('championPoints', 1)
-                is_otp = top_champ_id == playing_champ_id and top_points >= (second_points * 3)
-
-        # Safety fallback if history fails to load
-        if not isinstance(history, list):
-            history = []
-
-        return c_name, riot_id, rank, mastery, history, keystone_name, is_otp, is_autofilled
-
-    # Helper number two for Duo detection
-    @staticmethod
-    def _find_duos(player_histories: list) -> set:
-        duos = set()
-        # Compare every player's match history against every other player's history
-        for i in range(len(player_histories)):
-            for j in range(i + 1, len(player_histories)):
-                p1_id, p1_matches = player_histories[i]
-                p2_id, p2_matches = player_histories[j]
-
-                # If the lists intersect (share a Match ID), they're playing together lol
-                if p1_matches and p2_matches:
-                    shared_games = set(p1_matches).intersection(p2_matches)
-
-                    if len(shared_games) >= 2:  # If they have 2 or more shared games in their recent history, they're probably duos
-                        duos.add(p1_id)
-                        duos.add(p2_id)
-        return duos
-
-    # Initiate fetching enemy data as a function, this is where we get the mastery, rank, and match history for each enemy player, and also check if any of them are duos.
-    async def _fetch_enemy_data(self, match_data, enemy_team_id, server, region):
-        bot_entries = []
-        player_tasks = []
-
-        for p in match_data['participants']:
-            if p['teamId'] == enemy_team_id:
-                c_name = self.champ_dict.get(str(p['championId']), 'Unknown')
-                e_puuid = p.get('puuid')
-
-                if p.get('bot', False) or not e_puuid:
-                    bot_entries.append(c_name)
-                else:
-                    riot_id = p.get('riotId') or p.get('summonerName') or 'Unknown Player'
-                    live_position = p.get('teamPosition', '')
-                    player_tasks.append(
-                        self._fetch_single_enemy(c_name, riot_id, e_puuid, p['championId'], server, region, p.get('perks', {}), live_position)
-                    )
-        # Wait for all players to finish fetching
-        raw_results = await asyncio.gather(*player_tasks)
-
-        # Extract just the IDs and Histories to pass to our Duo Detective
-        histories = [(res[1], res[4]) for res in raw_results]
-        duo_set = DraftCommands._find_duos(histories)
-
-        # Build the final list to send to the embed formatter
-        final_players = []
-        for c_name, riot_id, rank, mastery, _, keystone_name, is_otp, is_autofilled in raw_results:
-            is_duo = riot_id in duo_set
-            final_players.append((c_name, riot_id, rank, mastery, is_duo, keystone_name, is_otp, is_autofilled))
-
-        return bot_entries, final_players
-
     # This part checks what type of bs the enemy team is running
     @app_commands.command(name="scout", description="Builds an enemy dossier for a live match.")
     @app_commands.describe(
@@ -439,7 +198,9 @@ class DraftCommands(commands.Cog):
 
             # Building the Discord Embed
             enemy_team_id = 200 if user_team == 100 else 100
-            bot_entries, player_results = await self._fetch_enemy_data(match_data, enemy_team_id, server, region)
+            bot_entries, player_results = await self.riot._fetch_enemy_data(
+                match_data, enemy_team_id, server, region, self.champ_dict, self.keystone_db, self.role_db
+            )
             embed = build_scout_embed(server, safe_name, bot_entries, player_results, self.ai.meta_db)
 
             await interaction.followup.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
