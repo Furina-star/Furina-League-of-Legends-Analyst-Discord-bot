@@ -10,7 +10,7 @@ import logging
 from typing import Optional, Union, Dict, Any, List
 from urllib.parse import quote
 from utils.cache import RiotCache
-from utils.parsers import parse_winrate, find_duos, detect_autofill
+from utils.parsers import parse_winrate, find_duos, detect_autofill, sort_team_roles
 
 logger = logging.getLogger(__name__)
 
@@ -204,10 +204,9 @@ class RiotAPIClient:
         return winrates, masteries, avg_wr
 
     # Helper number one for fetching enemy data
-    async def _fetch_single_enemy(self, c_name, riot_id, e_puuid, c_id, server, region, perks, live_position, keystone_db, role_db, champ_dict):
+    async def _fetch_single_enemy(self, c_name, riot_id, e_puuid, c_id, server, region, perks, inferred_position, keystone_db):
         # Check if Keystone was used
         if perks and 'perkIds' in perks and len(perks['perkIds']) > 0:
-            # Perks comes directly from participant['perks']['perkIds'][0] in the live match data
             keystone_id = str(perks['perkIds'][0])
             keystone_name = keystone_db.get(keystone_id, "Unknown Rune")
         else:
@@ -217,7 +216,7 @@ class RiotAPIClient:
         mastery_task = self.get_champion_mastery(e_puuid, c_id, platform_override=server)
         history_task = self.get_match_history(e_puuid, count=5, region_override=region)
 
-        # Fetch their Top Masteries champions
+        # Fetch their top mastery champion
         top_mastery_task = self.get_top_masteries(e_puuid, count=3, platform_override=server)
 
         async def get_rank():
@@ -228,24 +227,24 @@ class RiotAPIClient:
             mastery_task, get_rank(), history_task, top_mastery_task
         )
 
-        is_autofilled = detect_autofill(live_position, top_masteries, role_db, champ_dict)
+        # Safety fallback if history fails to load
+        if not isinstance(history, list):
+            history = []
+
+        # Reuse already-fetched history IDs, get_match_details is cached 24h so repeat calls are free
+        primary_role = await self.get_primary_role_from_history(history, e_puuid, region)
+        is_autofilled = detect_autofill(primary_role, inferred_position)
 
         is_otp = False
         if top_masteries:
             top_champ_id = top_masteries[0].get('championId')
             top_points = top_masteries[0].get('championPoints', 0)
-            playing_champ_id = c_id
 
             if len(top_masteries) == 1:
-                # Only 1 champion ever played — the ultimate OTP
-                is_otp = top_champ_id == playing_champ_id
+                is_otp = top_champ_id == c_id
             else:
                 second_points = top_masteries[1].get('championPoints', 1)
-                is_otp = top_champ_id == playing_champ_id and top_points >= (second_points * 3)
-
-        # Safety fallback if history fails to load
-        if not isinstance(history, list):
-            history = []
+                is_otp = top_champ_id == c_id and top_points >= (second_points * 3)
 
         return c_name, riot_id, rank, mastery, history, keystone_name, is_otp, is_autofilled
 
@@ -254,20 +253,32 @@ class RiotAPIClient:
         bot_entries = []
         player_tasks = []
 
-        for p in match_data['participants']:
-            if p['teamId'] == enemy_team_id:
-                c_name = champ_dict.get(str(p['championId']), 'Unknown')
-                e_puuid = p.get('puuid')
+        # Sort enemy team to get inferred positions
+        enemy_participants = [p for p in match_data['participants'] if p['teamId'] == enemy_team_id]
 
-                if p.get('bot', False) or not e_puuid:
-                    bot_entries.append(c_name)
-                else:
-                    riot_id = p.get('riotId') or p.get('summonerName') or 'Unknown Player'
-                    live_position = p.get('teamPosition', '')
-                    player_tasks.append(
-                        self._fetch_single_enemy(c_name, riot_id, e_puuid, p['championId'], server, region,
-                                                 p.get('perks', {}), live_position, keystone_db, role_db, champ_dict)
+        # Build a position lookup: championId -> inferred position string
+        sorted_champ_names = sort_team_roles(enemy_participants, champ_dict, role_db)
+        INDEX_TO_POSITION = {0: "TOP", 1: "JUNGLE", 2: "MIDDLE", 3: "BOTTOM", 4: "UTILITY"}
+        champ_to_position = {
+            name: INDEX_TO_POSITION[i] for i, name in enumerate(sorted_champ_names)
+        }
+
+        for p in enemy_participants:
+            c_name = champ_dict.get(str(p['championId']), 'Unknown')
+            e_puuid = p.get('puuid')
+
+            if p.get('bot', False) or not e_puuid:
+                bot_entries.append(c_name)
+            else:
+                riot_id = p.get('riotId') or p.get('summonerName') or 'Unknown Player'
+                inferred_position = champ_to_position.get(c_name, '')  # ← inferred from sort
+                player_tasks.append(
+                    self._fetch_single_enemy(
+                        c_name, riot_id, e_puuid, p['championId'],
+                        server, region, p.get('perks', {}), inferred_position,
+                        keystone_db
                     )
+                )
 
         # Wait for all players to finish fetching
         raw_results = await asyncio.gather(*player_tasks)
@@ -283,3 +294,25 @@ class RiotAPIClient:
             final_players.append((c_name, riot_id, rank, mastery, is_duo, keystone_name, is_otp, is_autofilled))
 
         return bot_entries, final_players
+
+    # Initiate the primary role detection as a function.
+    async def get_primary_role_from_history(self, match_ids: list, puuid: str, region: str) -> str:
+        if not match_ids:
+            return ""
+
+        # Fetch all match details concurrently — 24h cache means repeat calls are FREE
+        detail_tasks = [self.get_match_details(mid, region_override=region) for mid in match_ids]
+        details = await asyncio.gather(*detail_tasks)
+
+        role_counts = {}
+        for match in details:
+            if not isinstance(match, dict):
+                continue
+            for p in match.get('info', {}).get('participants', []):
+                if p.get('puuid') == puuid:
+                    role = p.get('teamPosition', '')
+                    if role:
+                        role_counts[role] = role_counts.get(role, 0) + 1
+                    break
+
+        return max(role_counts, key=role_counts.get) if role_counts else ""

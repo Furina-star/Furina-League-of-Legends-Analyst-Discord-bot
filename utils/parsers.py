@@ -1,6 +1,6 @@
 """
 This is the parsers module, which contains all the helper functions for parsing and processing data related to League of Legends.
-This includes functions for parsing Riot IDs, extracting win rates from rank strings, sorting team compositions by role, and detecting autofill situations based on player masteries and live positions.
+This includes functions for parsing Riot IDs, extracting win rates from rank strings, sorting team compositions by role, and detecting autofill situations by comparing a player's primary role from match history against their current inferred position.
 These functions are designed to be reusable across different parts of the bot, ensuring consistent data handling and improving code maintainability.
 """
 
@@ -96,30 +96,12 @@ def sort_team_roles(team_participants, champ_dict, meta_db):
 
     return roles
 
-# Autofill detection helper
-POSITION_TO_ROLE_KEY = {
-    "TOP": "KNOWN_TOPS",
-    "JUNGLE": None,  # Jungle is detected by Smite, not a pool
-    "MIDDLE": "KNOWN_MIDS",
-    "BOTTOM": "PURE_ADCS",
-    "UTILITY": "PURE_SUPPORTS"
-}
-
-def detect_autofill(live_position: str, top_masteries: list, role_db: dict, champ_dict: dict) -> bool:
-    if not live_position or not top_masteries:
+# Detect's if the enemy is Autofilled
+def detect_autofill(primary_role: str, current_position: str) -> bool:
+    if not primary_role or not current_position:
         return False
 
-    role_key = POSITION_TO_ROLE_KEY.get(live_position)
-    if not role_key:
-        return False  # Jungle — skip, can't reliably detect
-
-    role_pool = set(role_db.get(role_key, []))
-    if not role_pool:
-        return False  # Safety — if pool is empty, don't falsely flag
-
-    top_champ_names = {champ_dict.get(str(entry.get('championId')), '') for entry in top_masteries}
-
-    return not top_champ_names.intersection(role_pool)
+    return primary_role != current_position
 
 # Initiate the ban logic as a function
 def extract_bans(match_data: dict, champ_dict: dict):

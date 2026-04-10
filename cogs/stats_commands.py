@@ -74,7 +74,7 @@ class StatsCommands(commands.Cog):
             # Get the match details
             match_data = await self.riot.get_match_details(match_id, region_override=region)
             if not match_data:
-                await interaction.followup.send("⚠️ This player is not currently in a live match!")
+                await interaction.followup.send("⚠️ Could not fetch match data.")
                 return
 
             # Find the player's stats in the match data

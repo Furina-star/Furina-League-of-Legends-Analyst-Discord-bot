@@ -35,7 +35,7 @@ def _get_winrate_tags(rank: str) -> list:
     tags = []
 
     # Smurf Detection
-    if re.search(r"\b([789]\d)\.\d+%\s*WR", rank) and "Unranked" not in rank:
+    if re.search(r"\b([7-9]\d|100)\.\d+%\s*WR", rank) and "Unranked" not in rank:
         tags.append("🕵️ **SUSPECTED SMURF**")
 
     # Tactical Winrate Analysis
@@ -68,7 +68,6 @@ def _generate_furina_verdict(stats: dict) -> str:
     # Fallback just in case the player is so average, imagine being so average.
     if not applied_roasts:
         win = stats.get('win', False)
-        import random
 
         fallback_wins = [
             "A perfectly acceptable victory. Nothing more, nothing less.",
@@ -183,7 +182,7 @@ def _generate_player_tags(rank: str, mastery: int, is_duo: bool, meta_wr: float,
 
     if is_duo: tags.append("❤ **DUO**")
     if is_otp: tags.append("👑 **TRUE OTP**")
-    if is_autofilled: tags.append("⚠️ **AUTOFILLED**")
+    if is_autofilled: tags.append("❓ **AUTOFILLED?**")
 
     # Append all the helper functions above
     tags.extend(_get_meta_tags(meta_wr))

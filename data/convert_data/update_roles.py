@@ -63,19 +63,19 @@ def generate_dynamic_roles(csv_path=DEFAULT_CSV, output_path=DEFAULT_JSON):
         adc_pct = roles["BOTTOM"] / total_games
         sup_pct = roles["UTILITY"] / total_games
 
-        # 1. Bot Lane Sorting
+        # Bot Lane Sorting
         if adc_pct > 0.80:
             new_db["PURE_ADCS"].append(champ)
         elif adc_pct > 0.10:  # If played ADC more than 10% of the time
             new_db["FLEX_BOTS"].append(champ)
 
-        # 2. Support Sorting
+        # Support Sorting
         if sup_pct > 0.80:
             new_db["PURE_SUPPORTS"].append(champ)
         elif sup_pct > 0.10:
             new_db["FLEX_SUPPORTS"].append(champ)
 
-        # 3. Solo Lanes & Jungle Sorting
+        #  Solo Lanes & Jungle Sorting
         if mid_pct > 0.15:
             new_db["KNOWN_MIDS"].append(champ)
         if top_pct > 0.15:
