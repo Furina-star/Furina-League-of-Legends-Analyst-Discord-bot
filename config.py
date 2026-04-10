@@ -16,6 +16,13 @@ SERVER_TO_REGION = {
     "kr": "asia", "jp1": "asia", "sg2": "asia", "tw2": "asia", "vn2": "asia", "th2": "asia", "ph2": "asia"
 }
 
+# Riot API Queue ID Mapping
+QUEUE_MAP = {
+    400: "Normal Draft", 420: "Ranked Solo/Duo", 430: "Normal Blind",
+    440: "Ranked Flex", 450: "ARAM", 490: "Quickplay",
+    700: "Clash", 900: "URF", 1700: "Arena"
+}
+
 # The AI magic numbers
 FIRST_TIME_THRESHOLD = 10000
 FIRST_TIME_PENALTY = 0.015
@@ -33,3 +40,4 @@ META_PATH = os.path.join(BASE_DIR, 'data', 'Meta_Champions.json')
 ROLES_PATH = os.path.join(BASE_DIR, 'data', 'Champion_Roles.json')
 CHAMP_DICT_PATH = os.path.join(BASE_DIR, 'data', 'champion_cache.json')
 KEYSTONE_RUNES_PATH = os.path.join(BASE_DIR, 'data', 'Keystone_Runes.json')
+ITEM_DICT_PATH = os.path.join(BASE_DIR, 'data', 'Item_Dictionary.json')

@@ -1,6 +1,6 @@
-# Discord League Analyst Bot
+# 💧 Furina: League of Legends AI Analyst
 
-A modular, object-oriented Discord bot powered by the Riot Games API and PyTorch. Calculates live match win conditions and aggregates enemy player statistics into clean dossiers.
+Furina is a high-performance Discord bot designed to provide deep analytical insights into your League of Legends matches using the Riot Games API and custom machine learning models.
 
 ## Stack
 
@@ -19,6 +19,9 @@ Evaluates a live 5v5 draft using a trained PyTorch neural network and outputs wi
 
 ### `/ scout` — Live scouting dossier
 Detects which team the user is on and pulls champion mastery and Solo/Duo queue ranks for every enemy player.
+
+### `/ postgame` — Post-game analysis
+Ruthless performance reviews with lane rival comparisons and item build verification.
 
 ### Static Localization (i18n)
 Automatically detects the user's Discord client language and natively translates command outputs into 12 different languages.
@@ -75,6 +78,7 @@ Prefix: `/` (Slash Commands)
 | `/ ping`                          | Checks bot latency, and status                                                     |
 | `/ predict <server> RiotName#Tag` | Runs the live draft through the PyTorch model and outputs win probability per side |
 | `/ scout <server> RiotName#Tag`   | Generates an enemy team dossier with ranks and champion mastery                    |
+| `/ postgame <server> RiotName#Tag`| Provides a detailed post-game analysis for the specified match ID                    |
 
 ---
 

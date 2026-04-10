@@ -6,6 +6,8 @@ These functions are designed to be reusable across different parts of the bot, e
 
 import re
 import logging
+from config import QUEUE_MAP
+from typing import Optional
 
 # Get the logging system
 logger = logging.getLogger(__name__)
@@ -135,32 +137,39 @@ def format_team_display(team_picks: list, raw_team: list, meta_db: dict, champ_d
     return display
 
 # Isolates a single player's stats from a match and calculates team totals
-def extract_postgame_stats(match_data: dict, puuid: str, match_id: str) -> dict:
-    queue_map = {
-        400: "Normal Draft", 420: "Ranked Solo/Duo", 430: "Normal Blind",
-        440: "Ranked Flex", 450: "ARAM", 490: "Quickplay",
-        700: "Clash", 900: "URF", 1700: "Arena"
-    }
-    raw_queue_id = match_data['info'].get('queueId', 0)
-    raw_game_mode = match_data['info'].get('gameMode', 'UNKNOWN')
-    real_game_mode = queue_map.get(raw_queue_id, raw_game_mode)
+def extract_postgame_stats(match_data: dict, puuid: str, match_id: str) -> Optional[dict]:
+    if not isinstance(match_data, dict):
+        return None
 
-    # Find the player and their team ID
-    player_stats = None
-    team_id = None
-    for participant in match_data['info']['participants']:
-        if participant['puuid'] == puuid:
-            team_id = participant['teamId']
-            # Attach our custom data
-            participant['gameDuration'] = match_data['info']['gameDuration']
-            participant['gameMode'] = real_game_mode
-            participant['matchId'] = match_id
-            player_stats = participant
-            break
+    info = match_data.get('info', {})
+    participants = info.get('participants', [])
 
-    # Calculate Team Kills (for KP%)
-    if player_stats and team_id is not None:
-        team_kills = sum(p.get('kills', 0) for p in match_data['info']['participants'] if p['teamId'] == team_id)
-        player_stats['teamKills'] = team_kills
+    # Find the target player using next()
+    player = next((p for p in participants if p.get('puuid') == puuid), None)
+    if not player:
+        return None
 
-    return player_stats
+    # Inject match-level data
+    player['gameDuration'] = info.get('gameDuration', 0)
+    player['gameMode'] = QUEUE_MAP.get(info.get('queueId', 0), info.get('gameMode', 'UNKNOWN'))
+    player['matchId'] = match_id
+
+    # Setup variables for rival and team calculations
+    team_id = player.get('teamId')
+    role = player.get('teamPosition', '')
+    enemy_team_id = 200 if team_id == 100 else 100
+
+    # Calculate total team kills using a list comprehension
+    team_kills = sum(p.get('kills', 0) for p in participants if p.get('teamId') == team_id)
+    player['teamKills'] = max(team_kills, 1)  # Prevent division by zero
+
+    # Find the Lane Rival
+    if role and role != "Invalid":
+        player['rivalStats'] = next(
+            (p for p in participants if p.get('teamId') == enemy_team_id and p.get('teamPosition') == role),
+            None
+        )
+    else:
+        player['rivalStats'] = None
+
+    return player

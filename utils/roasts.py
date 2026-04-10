@@ -42,6 +42,46 @@ class ParsedStats:
         self.stolen_objs = stats.get('objectivesStolen', 0)
         self.dragons = stats.get('dragonKills', 0)
 
+        # Rival Stats
+        self.rival = stats.get('rivalStats', None)
+
+        # Item Extraction
+        self.items = [
+            stats.get('item0', 0), stats.get('item1', 0), stats.get('item2', 0),
+            stats.get('item3', 0), stats.get('item4', 0), stats.get('item5', 0)
+        ]
+        self.trinket = stats.get('item6', 0)
+
+        # Keystone Extraction
+        self.keystone_id = None
+        try:
+            self.keystone_id = str(stats['perks']['styles'][0]['selections'][0]['perk'])
+        except (KeyError, IndexError):
+            pass
+
+    # Calculates a rough performance letter grade.
+    def get_grade(self) -> str:
+        score = 0
+
+        # Calculate Score using Boolean Math (True = 1, False = 0)
+        # Example: If KP is 70%, it evaluates to (1) + (1) = 2 points!
+        score += (self.kp_percent > 45.0) + (self.kp_percent > 65.0)
+
+        if self.role == "UTILITY":
+            score += (self.vision_score > self.minutes) + (self.vision_score > self.minutes * 2)
+        else:
+            score += (self.cs_per_min > 6.0) + (self.cs_per_min > 8.0)
+
+        # Deaths give points for being low, and subtract 2 for feeding
+        score += (self.deaths <= 5) + (self.deaths <= 2)
+        score -= 2 * (self.deaths >= 10)
+
+        # Convert score to letter grade without massive if/elif chains
+        grade_map = [(5, "S+"), (4, "A"), (3, "B"), (1, "C"), (0, "D")]
+
+        # next() searches the map top-to-bottom and returns the first match. Default is "F".
+        return next((grade for limit, grade in grade_map if score >= limit), "F")
+
 # The dictionary containing all roasts and praises
 class RoastGenerator:
     def __init__(self, stats: dict):

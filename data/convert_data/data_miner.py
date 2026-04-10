@@ -12,7 +12,7 @@ if not RIOT_KEY: # Quick Sanity Check
 
 REGION = "asia"  # Change region
 PLATFORM = "sg2"  # Change platform (e.g., "na1", "euw1", "kr1", etc.)
-TARGET_MATCHES = 50000  # How many games to mine
+TARGET_MATCHES = 55000  # How many games to mine
 
 # Use absolute path relative to this script's location
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))

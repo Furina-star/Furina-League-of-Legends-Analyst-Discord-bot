@@ -62,6 +62,8 @@ if __name__ == "__main__":
     # Update the Math (Synergies & Meta).
     run_script("data/convert_data/build_synergy_matrix.py")
     run_script("data/convert_data/build_meta.py")
+    run_script("data/convert_data/build_items.py")
+    run_script("data/convert_data/build_runes.py")
 
     #  Retrain the AI Brain.
     run_script("train_model.py")
