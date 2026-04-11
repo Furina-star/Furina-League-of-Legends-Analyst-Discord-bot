@@ -1,7 +1,7 @@
 """
 This is the logging system for Furina System.
 It sets up a rotating file handler that creates a new log file every day and keeps logs depending on the backup count.
-It also initializes Sentry for crash telemetry..
+It also initializes Sentry for crash telemetry.
 """
 
 import os
