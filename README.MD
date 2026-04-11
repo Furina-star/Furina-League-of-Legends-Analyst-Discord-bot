@@ -72,13 +72,15 @@ python discord_bot.py
 
 Prefix: `/` (Slash Commands)
 
-| Command                           | Description                                                                        |
-|-----------------------------------|------------------------------------------------------------------------------------|
-| `/ help`                          | Displays the interactive help menu                                                 |
-| `/ ping`                          | Checks bot latency, and status                                                     |
-| `/ predict <server> RiotName#Tag` | Runs the live draft through the PyTorch model and outputs win probability per side |
-| `/ scout <server> RiotName#Tag`   | Generates an enemy team dossier with ranks and champion mastery                    |
-| `/ postgame <server> RiotName#Tag`| Provides a detailed post-game analysis for the specified match ID                    |
+| Command                            | Description                                                                        |
+|------------------------------------|------------------------------------------------------------------------------------|
+| `/ help`                           | Displays the interactive help menu                                                 |
+| `/ ping`                           | Checks bot latency, and status                                                     |
+| `/ trial`                          | Drag your duo to court and let the Oratrice decide who truly threw the game.       |
+| `/ confess`                        | Take the stand, admit your sins, and await the final verdict of the court.         |
+| `/ predict <server> RiotName#Tag`  | Runs the live draft through the PyTorch model and outputs win probability per side |
+| `/ scout <server> RiotName#Tag`    | Generates an enemy team dossier with ranks and champion mastery                    |
+| `/ postgame <server> RiotName#Tag` | Provides a detailed post-game analysis for the specified match ID                  |
 
 ---
 
