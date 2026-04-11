@@ -20,27 +20,9 @@ def generate_furina_verdict(stats: dict) -> str:
         if condition():
             applied_roasts.append(verdict)
 
-    # Fallback just in case the player is so average, imagine being so average.
+    # If no condition met get the generic win and loss verdicts
     if not applied_roasts:
-        win = stats.get('win', False)
-
-        fallback_wins = [
-            "A perfectly acceptable victory. Nothing more, nothing less.",
-            "You won. The crowd goes mild.",
-            "A victory so utterly standard it defies any attempt at commentary.",
-            "You secured the win without doing anything remarkably stupid or remarkably brilliant. How quaint.",
-            "The Nexus exploded in your favor, yet I am left entirely uninspired by how it happened."
-        ]
-
-        fallback_losses = [
-            "A rather embarrassing defeat. Please, try to be more entertaining next time.",
-            "You lost. It was neither a spectacular tragedy nor a close match. It was simply a waste of time.",
-            "Defeat. The most interesting thing about this match is that it eventually ended.",
-            "You played, you lost, and the world continues to spin completely unchanged.",
-            "A flawlessly generic defeat. You didn't even fail spectacularly enough to warrant a proper roast."
-        ]
-
-        return random.choice(fallback_wins) if win else random.choice(fallback_losses)
+        return engine.get_fallback_quote()
 
     # (The [:1024] protects the bot from crashing Discord's embed character limit)
     combo_roast = " ".join(applied_roasts)

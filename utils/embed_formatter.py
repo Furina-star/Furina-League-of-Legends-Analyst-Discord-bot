@@ -4,22 +4,15 @@ It takes in the relevant data and constructs a Discord Embed object with the app
 """
 
 import discord
-import random
 from typing import List, Tuple
-import json
-from config import ITEM_DICT_PATH, KEYSTONE_RUNES_PATH
-from utils.roasts import RoastGenerator, ParsedStats
+from utils.roasts import ParsedStats
 from utils.tags import get_pregame_tags, get_performance_tags
 from utils.verdicts import generate_furina_verdict
+from utils.data_loader import ITEM_DB, RUNE_DB
+import logging
 
-# Load ITEM_DB and RUNE_DB from config.py
-def _load_json(path):
-    try:
-        with open(path, 'r', encoding='utf-8') as f: return json.load(f)
-    except FileNotFoundError: return {}
-
-ITEM_DB = _load_json(ITEM_DICT_PATH)
-RUNE_DB = _load_json(KEYSTONE_RUNES_PATH)
+# Get the logging system
+logger = logging.getLogger(__name__)
 
 # The embed formatter sections
 # For help commands in cogs
@@ -31,8 +24,8 @@ def build_help_embed() -> discord.Embed:
         color=discord.Color.blue()
     )
     embed.add_field(name="🏓 `/ping`",value="Checks my current latency to Discord.",inline=False)
-    embed.add_field(name="⚔️ `/predict`",value="Calculates win probability for a live match.\n""**Requires:** Server and Riot ID",inline=False)
-    embed.add_field(name="🕵️ `/scout`",value="Builds an enemy dossier for a live match.\n""**Requires:** Server and Riot ID",inline=False)
+    embed.add_field(name="⚔️ `/predict`",value="Calculates win probability for a live match.\n**Requires:** Server and Riot ID",inline=False)
+    embed.add_field(name="🕵️ `/scout`",value="Builds an enemy dossier for a live match.\n**Requires:** Server and Riot ID", inline=False)
     embed.add_field(name="🏆 `/postgame`",value="Ruthlessly analyzes your most recent match, including lane rival diff and performance grades.",inline=False)
     embed.set_footer(text="Valid servers: NA1, EUW1, EUN1, KR, SG2, TW2, VN2, TH2, PH2, BR1, LAN1, LAS1, OC1, TR1, RU")
 
@@ -136,16 +129,15 @@ def build_lastgame_embed(server: str, riot_id: str, stats: dict, patch_version: 
     ])
 
     # Footer & Verdict
-    engine = RoastGenerator(stats)
-    applied_roasts = [v for cond, v in engine.get_all_rules() if cond()]
-
     if perf_tags := get_performance_tags(stats):
         embed.add_field(name="🏷️ Match Tags", value=perf_tags, inline=False)
 
     embed.add_field(name="\u200b", value="\u200b", inline=False)
-    embed.add_field(name="⚖️ Furina's Verdict", value=f"*{generate_furina_verdict(stats, applied_roasts)}*",inline=False)
+    embed.add_field(name="⚖️ Furina's Verdict", value=f"*{generate_furina_verdict(stats)}*", inline=False)
 
     safe_champ = p.champ.replace(" ", "").replace("'", "").title()
     embed.set_thumbnail(url=f"https://ddragon.leagueoflegends.com/cdn/{patch_version}/img/champion/{safe_champ}.png")
+
+    embed.set_footer(text=f"Mode: {p.game_mode} | Match ID: {p.match_id}")
 
     return embed

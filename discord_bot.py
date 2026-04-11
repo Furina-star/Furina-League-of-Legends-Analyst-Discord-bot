@@ -22,6 +22,7 @@ import traceback
 import config
 from utils.logger_algorithm import initialize_logger
 
+# Get the logging system
 logger = initialize_logger()
 
 # Initiate Data Dragon dictionary API  as a function
@@ -177,6 +178,14 @@ class DiscordBot(commands.Bot):
 if __name__ == "__main__":
     if not config.DISCORD_TOKEN or not config.RIOT_KEY:
         sys.exit("Error: DISCORD_TOKEN and RIOT_API_KEY must be set in the .env file.")
+
+    required_data_files = {
+        config.ITEM_DICT_PATH: "data/convert_data/build_items.py",
+        config.KEYSTONE_RUNES_PATH: "data/convert_data/build_runes.py",
+    }
+    for filepath, script in required_data_files.items():
+        if not os.path.exists(filepath):
+            logger.warning(f"Missing: {filepath} — run `python {script}` to generate it.")
 
     bot = DiscordBot()
 

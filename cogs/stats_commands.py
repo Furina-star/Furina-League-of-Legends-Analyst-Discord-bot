@@ -51,8 +51,6 @@ class StatsCommands(commands.Cog):
         await interaction.response.defer(thinking=True)
 
         try:
-            region = self.server_dict[server]
-
             # Get the puuid
             puuid = await self.riot.get_puuid(game_name, tag_line, region_override=region)
             if not puuid:
@@ -78,6 +76,7 @@ class StatsCommands(commands.Cog):
             if not player_stats:
                 await interaction.followup.send("⚠️ Error parsing player data.")
                 return
+
             # Build the embed and send the Roast/Praise embed
             embed = build_lastgame_embed(server, full_riot_id, player_stats, self.bot.patch_version)
             await interaction.followup.send(embed=embed)

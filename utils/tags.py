@@ -79,7 +79,7 @@ class PerformanceTagEngine:
             (lambda: p.kills >= 10 and p.damage < 15000, "🥷 **The Finisher (KS)**"),
             (lambda: p.role == 'UTILITY' and p.damage > 30000, "🔥 **Fine, I'll Do It Myself**"),
             (lambda: p.kp_percent > 60.0 and p.deaths == 0, "👻 **Untouchable**"),
-            (lambda: p.kp_percent >= 80.0, "🤝 **Team Player**"),
+            (lambda: p.kp_percent >= 80.0 and p.assists >= 10, "🤝 **Team Player**"),
             (lambda: p.win and p.deaths == 0 and p.kp_percent >= 30.0, "👑 **Unkillable Demon King**")
         ]
 
@@ -157,11 +157,46 @@ class PerformanceTagEngine:
             (lambda: p.healing > 30000, "💖 **Walking Fountain**")
         ]
 
+    def _jungle_rules(self) -> list:
+        p = self.p
+        return [
+            (lambda: p.role == 'JUNGLE' and p.stolen_objs >= 2, "🦅 **Elder Thief**"),
+            (lambda: p.role == 'JUNGLE' and p.dragons >= 4, "🐉 **Soul Collector**"),
+            (lambda: p.role == 'JUNGLE' and p.cs_per_min < 3.0 and p.minutes > 20,
+             "🗺️ **Full Clear? Never Heard Of It**"),
+            (lambda: p.role == 'JUNGLE' and p.kills + p.assists >= 20 and p.deaths <= 3, "🌪️ **Ganking Machine**"),
+            (lambda: p.role == 'JUNGLE' and p.damage < 8000 and p.minutes > 25, "🌿 **Pve Enjoyer**"),
+        ]
+
+    def _comeback_rules(self) -> list:
+        p = self.p
+        return [
+            (lambda: p.win and p.deaths >= 8 and p.kills >= 10, "🔄 **Redemption Arc**"),
+            (lambda: p.win and p.minutes > 40.0 and p.kp_percent >= 50.0, "🏋️ **Late Game Monster**"),
+            (lambda: not p.win and p.kills >= 15 and p.kp_percent >= 60.0, "🕯️ **Tried So Hard**"),
+            (lambda: p.win and p.damage > 35000 and p.deaths <= 2, "🎯 **Clinical**"),
+            (lambda: p.deaths >= 5 and p.win and p.kp_percent >= 70.0, "🧯 **Crisis Manager**"),
+        ]
+
+    def _streak_rules(self) -> list:
+        p = self.p
+        return [
+            (lambda: p.kills >= 5 and p.deaths == 0, "🔥 **On Fire**"),
+            (lambda: p.pentas == 0 and p.quadras == 0 and p.kills >= 3 and p.deaths == 0 and p.minutes < 15,
+             "⚡ **Early Menace**"),
+            (lambda: p.cs >= 400, "🌾 **Infinite Farm**"),
+            (lambda: p.gold >= 22000, "💎 **Gold Hoarder**"),
+            (lambda: p.vision_wards >= 20, "🔭 **Surveillance State**"),
+        ]
+
     def get_all_rules(self) -> list:
         return (
                 self._carry_rules() +
                 self._macro_rules() +
+                self._jungle_rules() +
                 self._utility_rules() +
+                self._comeback_rules() +
+                self._streak_rules() +
                 self._roast_rules() +
                 self._anomaly_rules() +
                 self._economy_rules() +
