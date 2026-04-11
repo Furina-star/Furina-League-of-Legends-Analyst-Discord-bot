@@ -9,6 +9,7 @@ import logging
 from utils.parsers import parse_riot_id, extract_postgame_stats
 from utils.embed_formatter import build_lastgame_embed
 from utils.discord_helpers import server_autocomplete
+from utils.views import MatchCycleView
 
 # Get the logging system
 logger = logging.getLogger("discord")
@@ -58,7 +59,7 @@ class StatsCommands(commands.Cog):
                 return
 
             # Get the most recent match ID
-            history = await self.riot.get_match_history(puuid, count=1, region_override=region, server_context=server)
+            history = await self.riot.get_match_history(puuid, count=10, region_override=region, server_context=server)
             if not history:
                 await interaction.followup.send("⚠️ This player has no recent games.")
                 return
@@ -77,7 +78,8 @@ class StatsCommands(commands.Cog):
 
             # Build the embed and send the Roast/Praise embed
             embed = build_lastgame_embed(server, full_riot_id, player_stats, self.bot.patch_version)
-            await interaction.followup.send(embed=embed)
+            view = MatchCycleView(self.riot, puuid, server, region, history, 0, self.bot.patch_version, full_riot_id)
+            await interaction.followup.send(embed=embed, view=view)
 
         except Exception as e:
             logger.error(f"Error in lastgame command: {e}")

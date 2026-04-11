@@ -32,6 +32,10 @@ class ParsedStats:
         self.vision_score = stats.get('visionScore', 0)
         self.healing = stats.get('totalHeal', 0)
 
+        # Summoner Spells
+        self.spell1_id = stats.get('summoner1Id', 0)
+        self.spell2_id = stats.get('summoner2Id', 0)
+
         # Challenge Stats (For Extra Tags and Roasts!)
         self.challenges = stats.get('challenges', {})
         self.skillshots_dodged = self.challenges.get('skillshotsDodged', 0)

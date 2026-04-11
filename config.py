@@ -23,6 +23,14 @@ QUEUE_MAP = {
     700: "Clash", 900: "URF", 1700: "Arena"
 }
 
+# The Standard Summoner Spells
+SUMMONER_SPELLS = {
+    "1": "Cleanse", "3": "Exhaust", "4": "Flash",
+    "6": "Ghost", "7": "Heal", "11": "Smite",
+    "12": "Teleport", "13": "Clarity", "14": "Ignite",
+    "21": "Barrier", "32": "Snowball"
+}
+
 # The AI magic numbers
 FIRST_TIME_THRESHOLD = 10000
 FIRST_TIME_PENALTY = 0.015

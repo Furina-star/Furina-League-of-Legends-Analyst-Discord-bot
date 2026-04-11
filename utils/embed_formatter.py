@@ -8,7 +8,7 @@ from typing import List, Tuple
 from utils.roasts import ParsedStats
 from utils.tags import get_pregame_tags, get_performance_tags
 from utils.verdicts import generate_furina_verdict
-from utils.data_loader import ITEM_DB, RUNE_DB
+from utils.data_loader import ITEM_DB, RUNE_DB, SPELL_DB
 import logging
 
 # Get the logging system
@@ -117,27 +117,32 @@ def build_lastgame_embed(server: str, riot_id: str, stats: dict, patch_version: 
         add_row([
             (f"🆚 {p.role.capitalize()} Rival", f"**{p.rival.get('championName', 'Unknown')}**"),
             ("💥 DMG Diff", f"**{'📈' if dmg_diff > 0 else '📉'} {dmg_diff:+,}**"),
-            ("📊 Gold Diff", f"**{'📈' if gold_diff > 0 else '📉'} {gold_diff:+,}**")
+            ("🪙 Gold Diff", f"**{'📈' if gold_diff > 0 else '📉'} {gold_diff:+,}**")
         ])
 
-    # Final Loadout Row
-    items = [f"• {ITEM_DB.get(str(i), 'Unknown')}" for i in p.items if i != 0]
     add_row([
         ("🔮 Keystone", RUNE_DB.get(str(p.keystone_id), "None")),
-        ("👁️ Trinket", ITEM_DB.get(str(p.trinket), "None")),
-        ("🎒 Final Build", "\n".join(items) if items else "Empty")
+        ("🏮 Trinket", ITEM_DB.get(str(p.trinket), "None")),
+        ("✨ Spells", f"{SPELL_DB.get(str(p.spell1_id), 'Unknown')} & {SPELL_DB.get(str(p.spell2_id), 'Unknown')}")
     ])
 
-    # Footer & Verdict
+    # Items
+    items = [ITEM_DB.get(str(i), 'Unknown') for i in p.items if i != 0]
+    build_string = " • ".join(items) if items else "Empty"
+    embed.add_field(name="🎒 Final Build", value=build_string, inline=False)
+
+    # Performance Tags
     if perf_tags := get_performance_tags(stats):
         embed.add_field(name="🏷️ Match Tags", value=perf_tags, inline=False)
 
+    # Verdict
     embed.add_field(name="\u200b", value="\u200b", inline=False)
     embed.add_field(name="⚖️ Furina's Verdict", value=f"*{generate_furina_verdict(stats)}*", inline=False)
 
     safe_champ = p.champ.replace(" ", "").replace("'", "").title()
     embed.set_thumbnail(url=f"https://ddragon.leagueoflegends.com/cdn/{patch_version}/img/champion/{safe_champ}.png")
 
+    # Footer
     embed.set_footer(text=f"Mode: {p.game_mode} | Match ID: {p.match_id}")
 
     return embed

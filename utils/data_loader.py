@@ -6,7 +6,7 @@ It also includes error handling for missing or corrupted data files, with approp
 
 import json
 import logging
-from config import KEYSTONE_RUNES_PATH, ITEM_DICT_PATH
+from config import KEYSTONE_RUNES_PATH, ITEM_DICT_PATH, SUMMONER_SPELLS
 
 
 logger = logging.getLogger(__name__)
@@ -27,6 +27,7 @@ def _load_json(path):
 
 ITEM_DB = _load_json(ITEM_DICT_PATH)
 RUNE_DB = _load_json(KEYSTONE_RUNES_PATH)
+SPELL_DB = SUMMONER_SPELLS
 
 # Reverse lookup: "Zhonya's Hourglass" -> 3157
 # Filter to base item IDs only (4 digits, no Ornn upgrade prefixes)

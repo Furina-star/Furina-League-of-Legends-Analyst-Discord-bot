@@ -196,8 +196,8 @@ class PerformanceTagEngine:
     def _dodging_rules(self) -> list:
         p = self.p
         return [
-            (lambda: p.skillshots_dodged >= 40, "🕊️ **Touhou Player**"),
-            (lambda: p.skillshots_dodged >= 25, "🕺 **Untouchable (Neo)**"),
+            (lambda: p.skillshots_dodged >= 50, "🕊️ **Touhou Player**"),
+            (lambda: p.skillshots_dodged >= 40, "🕺 **Untouchable**"),
             (lambda: p.dodge_streak >= 15, "💨 **The Wind**"),
             (lambda: p.dodge_streak >= 10, "⚡ **Ultra Instinct**"),
             (lambda: p.skillshots_dodged < 5 and p.deaths >= 8, "🧲 **Skillshot Magnet**"),
@@ -207,8 +207,8 @@ class PerformanceTagEngine:
     def _solo_kill_rules(self) -> list:
         p = self.p
         return [
-            (lambda: p.solo_kills >= 6, "🥊 **Undisputed Champion**"),
-            (lambda: p.solo_kills >= 4, "⚔️ **Grand Duelist**"),
+            (lambda: p.solo_kills >= 7, "🥊 **Undisputed Champion**"),
+            (lambda: p.solo_kills >= 5, "⚔️ **Grand Duelist**"),
             (lambda: p.solo_kills >= 2 and p.role == 'UTILITY', "🔪 **Support Assassin**"),
             (lambda: p.solo_kills == 0 and p.kills >= 10 and not p.win, "🦅 **Vulture (No Solo Kills)**"),
             (lambda: p.solo_kills == 0 and p.deaths >= 8, "🐑 **Helpless Prey**")
@@ -229,7 +229,7 @@ class PerformanceTagEngine:
         return [
             (lambda: p.cs_advantage >= 75 and p.role in ['TOP', 'MIDDLE', 'BOTTOM'], "🏰 **Evicted Opponent**"),
             (lambda: p.cs_advantage <= -75 and p.role in ['TOP', 'MIDDLE', 'BOTTOM'], "🎒 **Lunch Money Stolen**"),
-            (lambda: p.plates >= 7, "🏦 **Grand Larceny (8+ Plates)**"),
+            (lambda: p.plates >= 12, "🧨 **Armor Breaker**"),
             (lambda: p.plates == 0 and p.cs_advantage <= -40 and p.role in ['TOP', 'MIDDLE'] and p.minutes > 15, "🛡️ **Pathological Coward**")
         ]
 
@@ -255,7 +255,7 @@ class PerformanceTagEngine:
         return [
             (lambda: p.win and p.deaths == 0 and p.team_damage_pct <= 0.08 and p.kp_percent < 20.0,"👑 **Masquerade of the Guilty**"),
             (lambda: p.assists >= 25 and p.kp_percent >= 80.0 and p.kills <= 3, "🌊 **Director of the Salon**"),
-            (lambda: p.first_blood and not p.win and p.deaths >= 10, "⚖️ **Condemned by the Oratrice (FB + 10 Deaths)**"),
+            (lambda: p.first_blood and not p.win and p.deaths >= 10, "⚖️ **Condemned by the Oratrice**"),
             (lambda: p.damage_taken >= 50000 and p.deaths <= 3 and p.lucky_survivals >= 4, "🎭 **The Show Must Go On!**"),
             (lambda: p.vision_score >= 120, "🗞️ **The Steambird's Lead Reporter**"),
             (lambda: p.healing >= 30000 and p.damage >= 40000, "💧 **Perfect Pneuma/Ousia Alignment**"),
