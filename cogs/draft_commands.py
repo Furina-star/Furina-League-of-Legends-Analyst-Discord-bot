@@ -8,11 +8,11 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import logging
-from utils.embed_formatter import build_predict_embeds, build_scout_embed
-from utils.views import PredictView
+from modules.interface.embed_formatter import build_predict_embeds, build_scout_embed
+from modules.interface.views import PredictView
 from discord.utils import escape_mentions
-from utils.parsers import parse_riot_id, sort_team_roles, format_team_display
-from utils.discord_helpers import server_autocomplete
+from modules.utils.parsers import parse_riot_id, sort_team_roles, format_team_display
+from modules.interface.discord_helpers import server_autocomplete
 
 # Get the logging system
 logger = logging.getLogger(__name__)

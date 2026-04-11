@@ -6,7 +6,7 @@ The function also handles cases where the combined roast exceeds Discord's embed
 """
 
 import random
-from utils.roasts import RoastGenerator
+from modules.persona.roasts import RoastGenerator
 
 
 # Verdicts for post game review

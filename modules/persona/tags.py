@@ -5,7 +5,7 @@ The functions in this file are designed to be reusable across different parts of
 """
 
 import re
-from utils.roasts import ParsedStats
+from modules.persona.roasts import ParsedStats
 
 # The pregame tag dictionary for live games
 class PregameTagEngine:

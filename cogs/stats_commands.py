@@ -6,10 +6,10 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import logging
-from utils.parsers import parse_riot_id, extract_postgame_stats
-from utils.embed_formatter import build_lastgame_embed
-from utils.discord_helpers import server_autocomplete
-from utils.views import MatchCycleView
+from modules.utils.parsers import parse_riot_id, extract_postgame_stats
+from modules.interface.embed_formatter import build_lastgame_embed
+from modules.interface.discord_helpers import server_autocomplete
+from modules.interface.views import MatchCycleView
 
 # Get the logging system
 logger = logging.getLogger("discord")

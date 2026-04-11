@@ -7,7 +7,7 @@ commands that are common between Discord Bots.
 import discord
 from discord.ext import commands
 from discord import app_commands
-from utils.embed_formatter import build_help_embed
+from modules.interface.embed_formatter import build_help_embed
 import random
 import asyncio
 

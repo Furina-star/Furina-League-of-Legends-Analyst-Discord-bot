@@ -9,8 +9,8 @@ import random
 import logging
 from typing import Optional, Any
 from urllib.parse import quote
-from utils.cache import RiotCache
-from utils.parsers import parse_winrate, find_duos, detect_autofill, sort_team_roles
+from modules.utils.cache import RiotCache
+from modules.utils.parsers import parse_winrate, find_duos, detect_autofill, sort_team_roles
 
 logger = logging.getLogger(__name__)
 

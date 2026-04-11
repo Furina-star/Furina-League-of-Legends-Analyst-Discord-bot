@@ -4,8 +4,8 @@ Button and dropdowns like that should be here, so that they can be easily import
 
 import discord
 
-from utils.embed_formatter import build_lastgame_embed
-from utils.parsers import extract_postgame_stats
+from modules.interface.embed_formatter import build_lastgame_embed
+from modules.utils.parsers import extract_postgame_stats
 
 
 # This class handles the button for '/predict'

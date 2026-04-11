@@ -5,10 +5,10 @@ It takes in the relevant data and constructs a Discord Embed object with the app
 
 import discord
 from typing import List, Tuple
-from utils.roasts import ParsedStats
-from utils.tags import get_pregame_tags, get_performance_tags
-from utils.verdicts import generate_furina_verdict
-from utils.data_loader import ITEM_DB, RUNE_DB, SPELL_DB
+from modules.persona.roasts import ParsedStats
+from modules.persona.tags import get_pregame_tags, get_performance_tags
+from modules.persona.verdicts import generate_furina_verdict
+from modules.utils.data_loader import ITEM_DB, RUNE_DB, SPELL_DB
 import logging
 
 # Get the logging system

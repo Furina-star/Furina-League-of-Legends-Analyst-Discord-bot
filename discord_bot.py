@@ -17,10 +17,10 @@ import json
 import requests
 from riot_api import RiotAPIClient
 from ai_wrapper import LeagueAI
-from utils.translator import DiscordTranslator
+from modules.utils.translator import DiscordTranslator
 import traceback
 import config
-from utils.logger_algorithm import initialize_logger
+from modules.utils.logger_algorithm import initialize_logger
 
 # Get the logging system
 logger = initialize_logger()

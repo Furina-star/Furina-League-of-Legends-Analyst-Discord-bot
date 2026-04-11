@@ -7,8 +7,8 @@ The roasts can contain {champion} which will be replaced with the champion name 
 
 import random
 from itertools import chain
-from utils.data_loader import ITEM_NAME_TO_ID
-from utils.champion_roast import CHAMPION_DATABASE
+from modules.utils.data_loader import ITEM_NAME_TO_ID
+from modules.persona.champion_roast import CHAMPION_DATABASE
 
 # Roast and Praise dictionary
 # The rules are organized into categories: Champion-Specific, Tragedy, Economy, Role-Specific, and Praise.
