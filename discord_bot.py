@@ -13,54 +13,16 @@ from discord.ext import commands
 from discord import app_commands
 import os
 import sys
-import json
-import requests
+import traceback
+import config
 from riot_api import RiotAPIClient
 from ai_wrapper import LeagueAI
 from modules.utils.translator import DiscordTranslator
-import traceback
-import config
 from modules.utils.logger_algorithm import initialize_logger
+from modules.utils.data_loader import load_champion_mapping, META_DB, ROLE_DB, RUNE_DB
 
 # Get the logging system
 logger = initialize_logger()
-
-# Initiate Data Dragon dictionary API  as a function
-CACHE_FILE = "data/champion_cache.json"
-def get_champion_mapping():
-    try:
-        # Fetch just the version number
-        latest_version = requests.get("https://ddragon.leagueoflegends.com/api/versions.json", timeout=10).json()[0]
-
-        # Check if cache exists and is up to date
-        if os.path.exists(CACHE_FILE):
-            with open(CACHE_FILE) as f:
-                cached_data = json.load(f)
-                if cached_data.get("version") == latest_version:
-                    return cached_data.get("version"), cached_data.get("mapping")
-
-        # If no cache exists, or the patch updated, download the heavy file
-        champ_data = requests.get(f"https://ddragon.leagueoflegends.com/cdn/{latest_version}/data/en_US/champion.json",timeout=10).json()
-        id_to_name = {str(info['key']): name for name, info in champ_data['data'].items()}
-        id_to_name["-1"] = "None"
-
-        # Save the new mapping and version to the cache file
-        os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
-        with open(CACHE_FILE, "w") as f:
-            json.dump({"version": latest_version, "mapping": id_to_name}, f, indent=4)
-        return latest_version, id_to_name
-
-    except Exception as e:
-        logger.error(f"Data Dragon error: {e}")
-
-        # Just in case the Riot Server is down (Imagine RITO????)
-        if os.path.exists(CACHE_FILE):
-            logger.warning("Network Failed: Falling back to old local cache.")
-            with open(CACHE_FILE, "r") as f:
-                data = json.load(f)
-                return data.get("version", "14.8.1"), data.get("mapping", {})
-
-        return "14.8.1", {} # Return an empty dictionary if everything fails
 
 # Creating a subclass of commands.Bot
 class DiscordBot(commands.Bot):
@@ -75,23 +37,12 @@ class DiscordBot(commands.Bot):
         logger.info("Running one-time setup...")
 
         # Run the blocking Data Dragon update in a background thread
-        self.patch_version, self.champ_dict = await asyncio.to_thread(get_champion_mapping)
+        self.patch_version, self.champ_dict = await asyncio.to_thread(load_champion_mapping)
 
-        # Load JSON files safely in background threads
-        def load_json(filepath):
-            try:
-                with open(filepath, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except FileNotFoundError:
-                logger.error(f"CRITICAL: Could not find {filepath}!")
-                return {}
-            except json.JSONDecodeError:
-                logger.error(f"CRITICAL: Corrupt JSON file at {filepath}!")
-                return {}
-
-        self.meta_db = await asyncio.to_thread(load_json, config.META_PATH)
-        self.role_db = await asyncio.to_thread(load_json, config.ROLES_PATH)
-        self.keystone_db = await asyncio.to_thread(load_json, config.KEYSTONE_RUNES_PATH)
+        # Initialize Data
+        self.meta_db = META_DB
+        self.role_db = ROLE_DB
+        self.keystone_db = RUNE_DB
         self.server_dict = config.SERVER_TO_REGION
 
         # Initialize APIs
@@ -135,7 +86,6 @@ class DiscordBot(commands.Bot):
         # Sync slash commands
         logger.info("Syncing slash commands to Discord...")
         await self.tree.sync()
-
         logger.info("Slash commands and Translator synced successfully!")
 
     # Global Error handler
@@ -174,14 +124,14 @@ class DiscordBot(commands.Bot):
             logger.info("Riot API connection closed safely.")
         await super().close()
 
-
 if __name__ == "__main__":
     if not config.DISCORD_TOKEN or not config.RIOT_KEY:
         sys.exit("Error: DISCORD_TOKEN and RIOT_API_KEY must be set in the .env file.")
 
     required_data_files = {
-        config.ITEM_DICT_PATH: "data/convert_data/build_items.py",
-        config.KEYSTONE_RUNES_PATH: "data/convert_data/build_runes.py",
+        config.META_PATH: "data/convert_data/build_meta.py",
+        config.ROLES_PATH: "data/convert_data/update_roles.py",
+        config.SYNERGY_PATH: "data/convert_data/build_synergy_matrix.py",
     }
     for filepath, script in required_data_files.items():
         if not os.path.exists(filepath):

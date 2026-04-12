@@ -41,11 +41,17 @@ BASE_WINRATE = 0.50
 
 # The Directories
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Models
 MODEL_PATH = os.path.join(BASE_DIR, 'models', 'Lol_draft_predictor.safetensors')
 ENCODER_PATH = os.path.join(BASE_DIR, 'models', 'label_encoder.skops')
+
+# External Factor
 SYNERGY_PATH = os.path.join(BASE_DIR, 'data', 'Synergy_Matrix.json')
 META_PATH = os.path.join(BASE_DIR, 'data', 'Meta_Champions.json')
 ROLES_PATH = os.path.join(BASE_DIR, 'data', 'Champion_Roles.json')
+
+# RIOT Data Caches
 CHAMP_DICT_PATH = os.path.join(BASE_DIR, 'data', 'champion_cache.json')
 KEYSTONE_RUNES_PATH = os.path.join(BASE_DIR, 'data', 'Keystone_Runes.json')
 ITEM_DICT_PATH = os.path.join(BASE_DIR, 'data', 'Item_Dictionary.json')
