@@ -2,6 +2,7 @@ import asyncio
 import csv
 import os, sys
 import aiofiles
+import pandas as pd
 from collections import deque
 from dotenv import load_dotenv
 from riot_api import RiotAPIClient
@@ -13,10 +14,20 @@ if not RIOT_KEY:  # Quick Sanity Check
 
 REGION = "asia"  # Change region
 PLATFORM = "sg2"  # Change platform (e.g., "na1", "euw1", "kr1", etc.)
-TARGET_MATCHES = 55000  # How many games to mine
 
 SCRIPT_DIR = str(os.path.dirname(os.path.abspath(__file__)))
 CSV_FILENAME = str(os.path.join(SCRIPT_DIR, "..", "ranked_drafts.csv"))
+
+if os.path.exists(CSV_FILENAME):
+    df = pd.read_csv(CSV_FILENAME, low_memory=False)
+    assert isinstance(df, pd.DataFrame)
+
+    current_rows = len(df)
+    TARGET_MATCHES = current_rows + 5000
+    print(f"Found {current_rows} matches. Auto-mining until {TARGET_MATCHES}...")
+else:
+    TARGET_MATCHES = 5000
+    print("No database found. Starting fresh and mining 5000 matches...")
 
 # Initialize reading existing csv dataset as a function
 async def _load_existing_csv():

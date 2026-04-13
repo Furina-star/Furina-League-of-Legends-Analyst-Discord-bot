@@ -14,12 +14,13 @@ import os
 
 SCRIPT_DIR = str(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = str(os.path.dirname(SCRIPT_DIR))
+ROOT_DIR = os.path.dirname(DATA_DIR)
 
 def run_script(script_name):
     script_path = str(os.path.join(SCRIPT_DIR, script_name))
     print(f"\n🚀 Starting: {script_path}...")
     try:
-        subprocess.run([sys.executable, script_path], check=True)
+        subprocess.run([sys.executable, script_path], check=True, cwd=ROOT_DIR)
         print(f"Finished: {script_path}!")
     except subprocess.CalledProcessError:
         print(f"\nError occurred while running {script_path}.")
@@ -44,10 +45,7 @@ def prune_database():
 
 
 if __name__ == "__main__":
-    confirm = input("Did you increase TARGET_MATCHES by 5,000 in data_miner.py? (y/n): ")
-    if confirm.lower() != 'y':
-        print("🛑 Stopping. Please go update data_miner.py first!")
-        sys.exit()
+    print("Starting Autonomous Pipeline...")
 
     run_script("data_miner.py")
     prune_database()

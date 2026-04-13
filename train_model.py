@@ -14,6 +14,8 @@ import os
 from ai_wrapper import Model, calculate_team_synergy
 
 # Load your CUSTOM Mined Data
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+os.chdir(BASE_DIR)
 df = pd.read_csv("data/ranked_drafts.csv")
 
 # Load the Synergy Matrix
