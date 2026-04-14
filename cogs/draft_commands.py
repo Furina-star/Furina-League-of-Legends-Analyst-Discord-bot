@@ -243,7 +243,6 @@ class DraftCommands(commands.Cog):
             blue_dict=empty_dict,
             red_dict=empty_dict,
             role=role.value,
-            user_name=interaction.user.display_name,
             user_team=user_team_str
         )
         file = discord.File(fp=image_buffer, filename="draft_board.png")

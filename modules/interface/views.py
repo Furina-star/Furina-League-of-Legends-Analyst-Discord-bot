@@ -245,7 +245,6 @@ class LiveDraftDashboard(discord.ui.View):
             self.blue_dict,
             self.red_dict,
             self.role,
-            interaction.user.display_name,
             self.user_team
         )
         file = discord.File(fp=image_buffer, filename="draft_board.png")
