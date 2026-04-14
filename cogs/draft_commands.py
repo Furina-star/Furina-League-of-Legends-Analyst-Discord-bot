@@ -243,7 +243,8 @@ class DraftCommands(commands.Cog):
             blue_dict=empty_dict,
             red_dict=empty_dict,
             role=role.value,
-            user_team=user_team_str
+            user_team=user_team_str,
+            banned_champs = []
         )
         file = discord.File(fp=image_buffer, filename="draft_board.png")
 

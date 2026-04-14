@@ -21,6 +21,7 @@ WHITE_TEXT = (255, 255, 255)
 GOLD_TEXT = (255, 215, 0)
 BLUE_TEXT = (43, 109, 240)
 RED_TEXT = (240, 43, 43)
+DIM_TEXT = (114, 118, 125)
 BG_COLOR = (43, 45, 49, 255)
 SHADOW_COLOR = (0, 0, 0, 200)
 
@@ -58,11 +59,11 @@ def _get_background() -> Image.Image:
     if "bg" not in _ASSET_CACHE:
         bg_path = f"{ASSETS_DIR}/background.jpg"
         if os.path.exists(bg_path):
-            background = Image.open(bg_path).convert("RGBA").resize((800, 560))
-            overlay = Image.new("RGBA", (800, 560), (0, 0, 0, 80))
+            background = Image.open(bg_path).convert("RGBA").resize((800, 660))
+            overlay = Image.new("RGBA", (800, 660), (0, 0, 0, 80))
             _ASSET_CACHE["bg"] = Image.alpha_composite(background, overlay)
         else:
-            _ASSET_CACHE["bg"] = Image.new("RGBA", (800, 560), BG_COLOR)
+            _ASSET_CACHE["bg"] = Image.new("RGBA", (800, 660), BG_COLOR)
     return _ASSET_CACHE["bg"].copy()
 
 # Helper to cache the gold selection border.
@@ -82,6 +83,14 @@ def _get_rounded_mask() -> Image.Image:
         ImageDraw.Draw(mask).rounded_rectangle((0, 0, 80, 80), radius=12, fill=255)
         _ASSET_CACHE["mask"] = mask
     return _ASSET_CACHE["mask"]
+
+# Helper to cache a smaller rounded mask for banned champions
+def _get_ban_mask() -> Image.Image:
+    if "ban_mask" not in _ASSET_CACHE:
+        mask = Image.new("L", (45, 45), 0)
+        ImageDraw.Draw(mask).rounded_rectangle((0, 0, 45, 45), radius=8, fill=255)
+        _ASSET_CACHE["ban_mask"] = mask
+    return _ASSET_CACHE["ban_mask"]
 
 # Asynchronous Data Fetching
 async def fetch_icon(session: aiohttp.ClientSession, champ: str) -> Image.Image:
@@ -154,7 +163,10 @@ def _draw_team_column(canvas: Image.Image, draw: ImageDraw.ImageDraw, icons: lis
         y += 90
 
 # Main Execution Engine
-async def render_draft_board(blue_dict: dict, red_dict: dict, role: str, user_team: str) -> io.BytesIO:
+async def render_draft_board(blue_dict: dict, red_dict: dict, role: str, user_team: str, banned_champs: list = None) -> io.BytesIO:
+    if banned_champs is None:
+        banned_champs = []
+
     canvas = _get_background()
     draw = ImageDraw.Draw(canvas)
 
@@ -166,9 +178,43 @@ async def render_draft_board(blue_dict: dict, red_dict: dict, role: str, user_te
     async with aiohttp.ClientSession() as session:
         blue_icons = await asyncio.gather(*[fetch_icon(session, blue_dict[p]) for p in positions])
         red_icons = await asyncio.gather(*[fetch_icon(session, red_dict[p]) for p in positions])
+        ban_icons = await asyncio.gather(*[fetch_icon(session, champ) for champ in banned_champs])
 
     _draw_team_column(canvas, draw, blue_icons, blue_dict, role, user_team, "Blue", 40, "left")
     _draw_team_column(canvas, draw, red_icons, red_dict, role, user_team, "Red", 680, "right")
+
+    # Draw the Banned Champions Section!
+    _draw_centered_header(draw, "BANNED CHAMPIONS", 400, 565, _get_font(24), DIM_TEXT)
+
+    # Banning algorithm
+    ban_size = 45
+    spacing = 15
+    total_slots = 10
+
+    # Calculate perfect centering for exactly 10 slots
+    total_w = total_slots * ban_size + (total_slots - 1) * spacing
+    start_x = int(400 - (total_w / 2))
+    ban_mask = _get_ban_mask()
+
+    for i in range(total_slots):
+        x = start_x + i * (ban_size + spacing)
+        y = 600
+
+        if i < len(banned_champs):
+            # Draw locked ban
+            small_icon = ban_icons[i].resize((ban_size, ban_size), Image.Resampling.LANCZOS)
+            grayscale = small_icon.convert("LA").convert("RGBA")
+            canvas.paste(grayscale, (x, y), ban_mask)
+
+            draw.line((x + 4, y + ban_size - 4, x + ban_size - 4, y + 4), fill=(240, 43, 43, 230), width=4)
+        else:
+            draw.rounded_rectangle(
+                (x, y, x + ban_size, y + ban_size),
+                radius=8,
+                fill=(30, 32, 36, 180),
+                outline=(80, 84, 92, 200),
+                width=2
+            )
 
     buffer = io.BytesIO()
     canvas.save(buffer, format="PNG")
