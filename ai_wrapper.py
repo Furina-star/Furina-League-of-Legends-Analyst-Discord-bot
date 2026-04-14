@@ -198,9 +198,12 @@ class LeagueAI:
         return sorted_draft
 
     # Rapidly simulates the current draft state against all valid champions for a target role,
-    def suggest_champion(self, target_role: str, user_team: str, blue_dict: dict, red_dict: dict, role_db: dict):
+    def suggest_champion(self, target_role: str, user_team: str, blue_dict: dict, red_dict: dict, role_db: dict, banned_champs: list = None):
+        if banned_champs is None:
+            banned_champs = []
+
         target_role = target_role.lower()
-        champ_roles = self.get_champ_roles(role_db)
+        champ_roles = LeagueAI.get_champ_roles(role_db)
 
         # Filter the role database to get valid champions for the target role
         valid_champions = [
@@ -211,7 +214,7 @@ class LeagueAI:
 
         for champ in valid_champions:
             # Prevent suggesting a champion that is already picked
-            if champ in blue_dict.values() or champ in red_dict.values():
+            if champ in blue_dict.values() or champ in red_dict.values() or champ in banned_champs:
                 continue
 
             test_blue = blue_dict.copy()

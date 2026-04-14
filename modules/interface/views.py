@@ -97,13 +97,21 @@ class DraftInputModal(discord.ui.Modal):
         await interaction.response.defer()
         champ_name = quick_resolve_champion(self.champ_input.value, self.dashboard.champ_dict)
 
+        # If the champion is a valid character in League of Legends
         if champ_name not in self.dashboard.champ_dict.values():
             self.dashboard.error_msg = f"'{self.champ_input.value}' is not a valid champion!"
             await self.dashboard.update_dashboard(interaction)
             return
 
+        # If the champion is already locked in the draft pick
         if champ_name in self.dashboard.blue_dict.values() or champ_name in self.dashboard.red_dict.values():
             self.dashboard.error_msg = f"{champ_name} is already locked in elsewhere!"
+            await self.dashboard.update_dashboard(interaction)
+            return
+
+        # If the champion is banned
+        if champ_name in self.dashboard.banned_champs:
+            self.dashboard.error_msg = f"{champ_name} is banned and cannot be drafted!"
             await self.dashboard.update_dashboard(interaction)
             return
 
@@ -145,6 +153,8 @@ class LiveDraftDashboard(discord.ui.View):
         self.blue_dict = dict.fromkeys(positions, "Unknown")
         self.red_dict = dict.fromkeys(positions, "Unknown")
         self.error_msg = None
+        self.banned_champs = []
+        self.last_ban_input = ""
 
         positions = ['top', 'jungle', 'mid', 'adc', 'support']
         for r in positions:
@@ -160,12 +170,21 @@ class LiveDraftDashboard(discord.ui.View):
                 btn.disabled = True
             self.add_item(btn)
 
+        # Ban button
+        ban_btn = discord.ui.Button(label="Add Ban", style=discord.ButtonStyle.secondary, emoji="🚫", row=2)
+        async def ban_callback(interaction):
+            await interaction.response.send_modal(BanInputModal(self, self.last_ban_input))
+
+        ban_btn.callback = ban_callback
+        self.add_item(ban_btn)
+
         # Add Reset button
         reset_btn = discord.ui.Button(label="Reset Draft", style=discord.ButtonStyle.secondary, emoji="↩️", row=2)
 
         async def reset_callback(interaction):
             self.blue_dict = dict.fromkeys(positions, "Unknown")
             self.red_dict = dict.fromkeys(positions, "Unknown")
+            self.banned_champs = []
             self.error_msg = None
             await interaction.response.defer()
             await self.update_dashboard(interaction)
@@ -174,7 +193,7 @@ class LiveDraftDashboard(discord.ui.View):
         self.add_item(reset_btn)
 
     async def update_dashboard(self, interaction: discord.Interaction):
-        top_picks = self.ai.suggest_champion(self.role, self.user_team, self.blue_dict, self.red_dict, self.role_db)
+        top_picks = self.ai.suggest_champion(self.role, self.user_team, self.blue_dict, self.red_dict, self.role_db, self.banned_champs)
 
         # Embed color also reflects error state or team color
         desc = f"Simulating optimal **{self.role.title()}** picks for the **{self.user_team}** side."
@@ -194,6 +213,11 @@ class LiveDraftDashboard(discord.ui.View):
             color=embed_color
         )
 
+        # Render the banned champions inside the embed if they exist
+        if self.banned_champs:
+            embed.add_field(name="🚫 Banned Champions", value=", ".join(self.banned_champs), inline=False)
+
+        # Render the AI suggestions
         if not top_picks:
             embed.add_field(name="⚠️ Standby", value="Waiting for more data to simulate...", inline=False)
         else:
@@ -222,3 +246,64 @@ class LiveDraftDashboard(discord.ui.View):
             await interaction.edit_original_response(embed=embed, view=self)
         except discord.errors.InteractionResponded:
             pass
+
+# This class handles champion input for bans in '/coach'
+class BanInputModal(discord.ui.Modal):
+    def __init__(self, dashboard_view, default_text: str = ""):
+        super().__init__(title="Add Banned Champions")
+        self.dashboard = dashboard_view
+
+        self.champ_input = discord.ui.TextInput(
+            label="Banned Champion",
+            placeholder="e.g., Aatrox, Zed, Yasuo",
+            required=True,
+            max_length=100,
+            default=default_text
+        )
+        self.add_item(self.champ_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+
+        # Instantly save whatever they typed into the Dashboard's memory
+        self.dashboard.last_ban_input = self.champ_input.value
+
+        # Split by comma and instantly remove any extra spaces
+        raw_inputs = [c.strip() for c in self.champ_input.value.split(',') if c.strip()]
+
+        # Enforce 1 to 5 champions per submission
+        if len(raw_inputs) > 5:
+            self.dashboard.error_msg = "You can only add up to 5 bans at a time!"
+            return await self.dashboard.update_dashboard(interaction)
+
+        # Enforce the absolute 10-ban limit
+        if len(self.dashboard.banned_champs) + len(raw_inputs) > 10:
+            self.dashboard.error_msg = f"Exceeds the 10 ban limit! (Currently at {len(self.dashboard.banned_champs)}/10)"
+            return await self.dashboard.update_dashboard(interaction)
+
+        valid_bans_to_add = []
+
+        # Validate every single typed champion before locking any of them in
+        for raw_champ in raw_inputs:
+            champ_name = quick_resolve_champion(raw_champ, self.dashboard.champ_dict)
+
+            if champ_name not in self.dashboard.champ_dict.values():
+                self.dashboard.error_msg = f"'{raw_champ}' is not a valid champion!"
+                return await self.dashboard.update_dashboard(interaction)
+
+            if champ_name in self.dashboard.blue_dict.values() or champ_name in self.dashboard.red_dict.values():
+                self.dashboard.error_msg = f"{champ_name} is already locked in! Cannot ban."
+                return await self.dashboard.update_dashboard(interaction)
+
+            if champ_name in self.dashboard.banned_champs or champ_name in valid_bans_to_add:
+                self.dashboard.error_msg = f"{champ_name} is already banned!"
+                return await self.dashboard.update_dashboard(interaction)
+
+            valid_bans_to_add.append(champ_name)
+
+        # If everything passes, inject all the valid bans at once
+        self.dashboard.banned_champs.extend(valid_bans_to_add)
+        self.dashboard.last_ban_input = ""
+        self.dashboard.error_msg = None
+        await self.dashboard.update_dashboard(interaction)
+        return None

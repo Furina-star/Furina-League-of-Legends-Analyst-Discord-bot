@@ -209,10 +209,11 @@ class DraftCommands(commands.Cog):
         app_commands.Choice(name="Blue", value="blue"),
         app_commands.Choice(name="Red", value="red")
     ])
+    @app_commands.checks.cooldown(1, 5, key=lambda i: i.user.id)
     async def coach(self, interaction: discord.Interaction, role: app_commands.Choice[str],team: app_commands.Choice[str]):
         dashboard = LiveDraftDashboard(self.ai, role.value, team.value, self.role_db, self.champ_dict)
         empty_dict = dict.fromkeys(['top', 'jungle', 'mid', 'adc', 'support'], "Unknown")
-        top_picks = self.ai.suggest_champion(role.value, team.value, empty_dict, empty_dict, self.role_db)
+        top_picks = self.ai.suggest_champion(role.value, team.value, empty_dict, empty_dict, self.role_db, [])
 
         embed = discord.Embed(
             title="🧠 Furina's Live Draft Coach",

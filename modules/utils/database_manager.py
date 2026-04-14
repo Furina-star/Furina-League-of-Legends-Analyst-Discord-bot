@@ -6,10 +6,9 @@ By centralizing database operations in this class, we can ensure consistent data
 
 import aiosqlite
 import logging
-from modules.utils.logger_algorithm import initialize_logger
 
 # Get the logging system
-logger = initialize_logger()
+logger = logging.getLogger(__name__)
 
 class DatabaseManager:
     def __init__(self, db_path="data/server_state.db"):

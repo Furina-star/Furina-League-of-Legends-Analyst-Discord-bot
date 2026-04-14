@@ -13,7 +13,6 @@ from discord.ext import commands
 from discord import app_commands
 from modules.interface.embed_formatter import build_help_embed
 from modules.interface.discord_helpers import server_autocomplete
-from modules.utils.database_manager import DatabaseManager
 from modules.persona.verdicts import GUILTY_TEMPLATES, PLOT_TWIST_TEMPLATES, MERCY_TEMPLATES, SENTENCE_TEMPLATES
 from modules.utils.state_resolvers import resolve_link_state
 
@@ -27,7 +26,6 @@ class GeneralCommands(commands.Cog):
         self.plot_twist_deck = []
         self.mercy_deck = []
         self.sentence_deck = []
-        self.db = DatabaseManager()
 
     # The Master Card Drawer, helper to refill, shuffle, and format a card from a deck
     def _draw_verdict(self, deck_name: str, templates: list, **kwargs) -> str:
@@ -125,19 +123,19 @@ class GeneralCommands(commands.Cog):
                     "⚠️ Could not find that Riot ID. Ensure the spelling and region are correct.")
 
             # Anti-Fraud Validation
-            existing_owner = await self.db.get_discord_id_by_puuid(puuid)
+            existing_owner = await self.bot.db.get_discord_id_by_puuid(puuid)
             if existing_owner and str(existing_owner) != str(interaction.user.id):
                 return await interaction.followup.send(
                     f"⚠️ Identity theft is a serious crime! That Riot ID is already claimed by <@{existing_owner}>.")
 
             # Call the helper from state_resolvers.py
-            should_abort, msg = await resolve_link_state(self.db, interaction.user.id, puuid, new_riot_id)
+            should_abort, msg = await resolve_link_state(self.bot.db, interaction.user.id, puuid, new_riot_id)
 
             if should_abort:
                 return await interaction.followup.send(msg)
 
             # Database execution
-            await self.db.link_account(interaction.user.id, puuid, new_riot_id)
+            await self.bot.db.link_account(interaction.user.id, puuid, new_riot_id)
             await interaction.followup.send(msg)
 
 
@@ -155,12 +153,12 @@ class GeneralCommands(commands.Cog):
     @app_commands.checks.cooldown(1, 2, key=lambda i: i.user.id)
     async def unlink(self, interaction: discord.Interaction):
         try:
-            current_link = await self.db.get_linked_account(interaction.user.id)
+            current_link = await self.bot.db.get_linked_account(interaction.user.id)
             if not current_link:
                 await interaction.response.send_message( "⚠️ You don't have an account linked to the Oratrice. You are already free.", ephemeral=True)
                 return
 
-            await self.db.unlink_account(interaction.user.id)
+            await self.bot.db.unlink_account(interaction.user.id)
             await interaction.response.send_message(f"✅ Your account (**{current_link[0]}**) has been successfully unlinked. The Oratrice will no longer track your performances.", ephemeral=True)
 
         except aiosqlite.Error as db_err:
@@ -170,5 +168,5 @@ class GeneralCommands(commands.Cog):
 # Setup hook to load the Cog
 async def setup(bot):
     cog = GeneralCommands(bot)
-    await cog.db.init_db()
+    await cog.bot.db.init_db()
     await bot.add_cog(cog)
