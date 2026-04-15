@@ -55,16 +55,17 @@ def _get_font(size: int) -> ImageFont.FreeTypeFont:
     return _ASSET_CACHE[cache_key]
 
 # Helper to load, composite, and cache the background image.
-def _get_background() -> Image.Image:
-    if "bg" not in _ASSET_CACHE:
-        bg_path = f"{ASSETS_DIR}/background.jpg"
+def _get_background(bg_filename: str = "background.jpg") -> Image.Image:
+    cache_key = f"bg_{bg_filename}"
+    if cache_key not in _ASSET_CACHE:
+        bg_path = f"{ASSETS_DIR}/{bg_filename}"
         if os.path.exists(bg_path):
             background = Image.open(bg_path).convert("RGBA").resize((800, 660))
-            overlay = Image.new("RGBA", (800, 660), (0, 0, 0, 80))
-            _ASSET_CACHE["bg"] = Image.alpha_composite(background, overlay)
+            overlay = Image.new("RGBA", (800, 660), (0, 0, 0, 40))
+            _ASSET_CACHE[cache_key] = Image.alpha_composite(background, overlay)
         else:
-            _ASSET_CACHE["bg"] = Image.new("RGBA", (800, 660), BG_COLOR)
-    return _ASSET_CACHE["bg"].copy()
+            _ASSET_CACHE[cache_key] = Image.new("RGBA", (800, 660), BG_COLOR)
+    return _ASSET_CACHE[cache_key].copy()
 
 # Helper to cache the gold selection border.
 def _get_select_icon() -> Image.Image | None:
@@ -126,6 +127,10 @@ def _resolve_slot_visuals(current_val: str, pos: str, is_user: bool, team_name: 
         formatted_pos = "ADC" if pos == "adc" else pos.title()
         return f"[{formatted_pos}]", (GOLD_TEXT if is_user else WHITE_TEXT)
 
+    # Slice the name if it is too long to prevent center overlap
+    if player_name and len(player_name) > 11:
+        player_name = player_name[:10] + "…"
+
     display_text = player_name if player_name else current_val
     text = f"{display_text} (You)" if is_user else display_text
     color = BLUE_TEXT if team_name == "Blue" else RED_TEXT
@@ -165,9 +170,8 @@ def _draw_team_column(canvas: Image.Image, draw: ImageDraw.ImageDraw, icons: lis
         y += 90
 
 # Main Execution Engine
-async def render_draft_board(blue_dict: dict, red_dict: dict, role: str, user_team: str, banned_champs: list = None, blue_names: dict = None, red_names: dict = None, blue_prob: float = None, red_prob: float = None) -> io.BytesIO:
-
-    canvas = _get_background()
+async def render_draft_board(blue_dict: dict, red_dict: dict, role: str, user_team: str, banned_champs: list | None = None, blue_names: dict | None = None, red_names: dict | None = None, blue_prob: float | None = None, red_prob: float | None = None, bg_filename: str = "background.jpg") -> io.BytesIO:
+    canvas = _get_background(bg_filename)
     draw = ImageDraw.Draw(canvas)
 
     _draw_centered_header(draw, "BLUE TEAM", 200, 30, _get_font(36), BLUE_TEXT)
@@ -186,7 +190,7 @@ async def render_draft_board(blue_dict: dict, red_dict: dict, role: str, user_te
 
     # Tug of War Bar
     if blue_prob is not None and red_prob is not None:
-        bar_x, bar_y = 100, 545
+        bar_x, bar_y = 100, 565
         bar_w, bar_h = 600, 24
 
         draw.rectangle([bar_x - 2, bar_y - 2, bar_x + bar_w + 2, bar_y + bar_h + 2], fill=(20, 20, 20, 220))
@@ -195,13 +199,27 @@ async def render_draft_board(blue_dict: dict, red_dict: dict, role: str, user_te
         draw.rectangle([bar_x, bar_y, bar_x + blue_w, bar_y + bar_h], fill=(43, 109, 240, 230))
         draw.rectangle([bar_x + blue_w, bar_y, bar_x + bar_w, bar_y + bar_h], fill=(240, 43, 43, 230))
 
-        # Add Sleek percentage text inside the bar
+        # The text percentage inside the Tug-of-war bar
         prob_font = _get_font(18)
-        draw.text((bar_x + 10, bar_y), f"{blue_prob * 100:.1f}%", fill=WHITE_TEXT, font=prob_font)
+        draw.text(
+            (bar_x + 10, bar_y),
+            f"{blue_prob * 100:.1f}%",
+            fill=WHITE_TEXT,
+            font=prob_font,
+            stroke_width=2,
+            stroke_fill=(0, 0, 0, 255)
+        )
 
         red_text = f"{red_prob * 100:.1f}%"
         red_bbox = draw.textbbox((0, 0), red_text, font=prob_font)
-        draw.text((bar_x + bar_w - (red_bbox[2] - red_bbox[0]) - 10, bar_y), red_text, fill=WHITE_TEXT, font=prob_font)
+        draw.text(
+            (bar_x + bar_w - (red_bbox[2] - red_bbox[0]) - 10, bar_y),
+            red_text,
+            fill=WHITE_TEXT,
+            font=prob_font,
+            stroke_width=2,
+            stroke_fill=(0, 0, 0, 255)
+        )
 
     # Draw the Banned Champions Section!
     if banned_champs is not None:
@@ -229,7 +247,7 @@ async def render_draft_board(blue_dict: dict, red_dict: dict, role: str, user_te
                 )
     else:
         if blue_prob is not None:
-            canvas = canvas.crop((0, 0, 800, 590))
+            canvas = canvas.crop((0, 0, 800, 610))
         else:
             canvas = canvas.crop((0, 0, 800, 560))
 

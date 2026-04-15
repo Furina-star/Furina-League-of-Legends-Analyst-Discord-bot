@@ -47,15 +47,29 @@ def build_predict_embed(blue_prob: float, red_prob: float, avg_blue_wr: float, a
     game_mode = QUEUE_MAP.get(queue_id) or QUEUE_MAP.get(str(queue_id)) or match_data.get('gameMode', 'Unknown Mode')
     match_id = match_data.get('gameId', 'Unknown ID')
 
+    if blue_prob > red_prob:
+        color = discord.Color.blue()
+        adv = blue_prob - red_prob
+        verdict = "🥇 **Blue Team is heavily favored to win.**" if adv > 0.15 else "🥈 **Blue Team has a slight draft advantage.**"
+    else:
+        color = discord.Color.red()
+        adv = red_prob - blue_prob
+        verdict = "🥇 **Red Team is heavily favored to win.**" if adv > 0.15 else "🥈 **Red Team has a slight draft advantage.**"
+
     description = (
-        f"**🟦 Blue Win Chance:** {blue_prob * 100:.1f}% *(Avg WR: {avg_blue_wr:.1f}% | Synergy: {blue_synergy * 100:+.1f})*\n"
-        f"**🟥 Red Win Chance:** {red_prob * 100:.1f}% *(Avg WR: {avg_red_wr:.1f}% | Synergy: {red_synergy * 100:+.1f})*"
+        f"{verdict}\n\n"
+        f"**📊 Roster Analytics:**\n"
+        f"> 🟦 **Blue Team**\n"
+        f"> └ Avg WR: `{avg_blue_wr:.1f}%`  |  Synergy: `{blue_synergy * 100:+.1f}`\n"
+        f"> \n"
+        f"> 🟥 **Red Team**\n"
+        f"> └ Avg WR: `{avg_red_wr:.1f}%`  |  Synergy: `{red_synergy * 100:+.1f}`"
     )
 
     embed = discord.Embed(
-        title="🔴 LIVE MATCH PREDICTION",
+        title="🔴 LIVE MATCH ANALYSIS",
         description=description,
-        color=discord.Color.dark_purple()
+        color=color
     )
 
     embed.set_image(url="attachment://draft_board.png")

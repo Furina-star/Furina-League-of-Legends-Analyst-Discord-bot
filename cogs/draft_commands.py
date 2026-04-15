@@ -11,7 +11,7 @@ import logging
 from modules.interface.embed_formatter import build_predict_embed, build_scout_embed, build_draft_embed
 from modules.interface.views import LiveDraftDashboard
 from discord.utils import escape_mentions
-from modules.utils.parsers import parse_riot_id, sort_team_roles
+from modules.utils.parsers import parse_riot_id, sort_team_roles, extract_live_player_names
 from modules.interface.discord_helpers import server_autocomplete
 from modules.interface.canvas_engine import render_draft_board
 
@@ -111,31 +111,21 @@ class DraftCommands(commands.Cog):
             blue_dict = dict(zip(positions, blue_picks))
             red_dict = dict(zip(positions, red_picks))
 
-            # Get the player names
-            def get_names(sorted_picks, raw_team):
-                names = []
-                for pick in sorted_picks:
-                    player = next((p for p in raw_team if self.champ_dict.get(str(p['championId']), 'Unknown') == pick),
-                                  None)
-                    if player:
-                        names.append(player.get('riotIdGameName') or player.get('summonerName') or "Unknown")
-                    else:
-                        names.append("Unknown")
-                return names
-
             # Map the extracted names to standard positions
-            blue_names = dict(zip(positions, get_names(blue_picks, raw_blue_team)))
-            red_names = dict(zip(positions, get_names(red_picks, raw_red_team)))
+            blue_names = dict(zip(positions, extract_live_player_names(blue_picks, raw_blue_team, self.champ_dict)))
+            red_names = dict(zip(positions, extract_live_player_names(red_picks, raw_red_team, self.champ_dict)))
 
             image_buffer = await render_draft_board(
                 blue_dict=blue_dict,
                 red_dict=red_dict,
                 role="None",
                 user_team="None",
-                blue_names = blue_names,
-                red_names = red_names,
-                blue_prob = final_blue_prob,
-                red_prob = final_red_prob
+                banned_champs=None,
+                blue_names=blue_names,
+                red_names=red_names,
+                blue_prob=final_blue_prob,
+                red_prob=final_red_prob,
+                bg_filename="predict_bg.jpg"  # Background Image
             )
 
             file = discord.File(fp=image_buffer, filename="draft_board.png")

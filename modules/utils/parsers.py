@@ -306,3 +306,22 @@ def quick_resolve_champion(raw_name: str, champ_db: dict) -> str:
 
     # Fallback if no match is found
     return raw_name.title().replace(" ", "").replace("'", "")
+
+# Extracts and formats live spectator V5 Riot IDs based on sorted draft positions
+def extract_live_player_names(sorted_picks: list, raw_team: list, champ_dict: dict) -> list:
+    names = []
+    for pick in sorted_picks:
+        # Securely resolve the player, translating Riot's internal 'MonkeyKing' to 'Wukong'
+        player = next((p for p in raw_team if champ_dict.get(str(p['championId']), 'Unknown').replace('MonkeyKing', 'Wukong') == pick), None)
+
+        if player:
+            # V5 API uses 'riotId' combined string (e.g., Faker#KR1). Slice off the tag
+            riot_id = player.get('riotId', '')
+            if '#' in riot_id:
+                names.append(riot_id.split('#')[0])
+            else:
+                # Fallbacks for older data or custom game endpoints
+                names.append(player.get('riotIdGameName') or player.get('summonerName') or "Unknown")
+        else:
+            names.append("Unknown")
+    return names
