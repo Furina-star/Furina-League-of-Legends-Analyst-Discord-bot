@@ -80,24 +80,47 @@ def build_predict_embed(blue_prob: float, red_prob: float, avg_blue_wr: float, a
 # For scout command in cogs
 def build_scout_embed(server: str, game_name: str, bots: list, players: list, meta_db: dict) -> discord.Embed:
     embed = discord.Embed(
-        title=f"🕵️ Enemy Team Dossier ({server.upper()})",
-        description=f"Scouting for **{game_name}**",
-        color=discord.Color.dark_purple()
+        title=f"🕵️ ENEMY DOSSIER: {server.upper()}",
+        description=f"Live Threat Assessment for **{game_name}**\n" + "▬" * 30,
+        color=discord.Color.dark_red()
     )
 
     for c_name in bots:
-        embed.add_field(name=f"🤖 {c_name} (Bot)", value="No data available.", inline=False)
+        embed.add_field(name=f"🤖 {c_name} (Bot)", value="> No data available for AI.", inline=False)
 
     for c_name, riot_id, rank, mastery, is_duo, keystone, is_otp, is_autofilled in players:
         meta_wr = meta_db.get(c_name, 0.50)
         tag_string = get_pregame_tags(mastery, is_otp, is_duo, is_autofilled, meta_wr, rank)
-        tag_display = f"\n**Tags:** {tag_string}" if tag_string else ""
 
-        keystone_display = f" [{keystone}]" if keystone != "None" else ""
+        # Tags and Keystone
+        tag_display = f"\n> 🏷️ **Tags:** {tag_string}" if tag_string else ""
+        keystone_display = keystone if keystone != "None" else "Unknown"
+
+        #  Strip the 'Flex' prefix
+        if "\n" in rank:
+            # Re-indent the second line so it perfectly aligns with the top line
+            rank = rank.replace("\nFlex:", "\n> 🏅 **Flex:**").replace("\n**Flex:**", "\n> 🏅 **Flex:**")
+        elif rank.startswith("Flex "):
+            # Handle players who ONLY have a Flex rank
+            rank = rank.replace("Flex ", "", 1)
+            if " |" in rank:
+                rank = rank.replace(" |", " *(Flex)* |", 1)
+            else:
+                rank += " *(Flex)*"
+
+        # OP.GG uses dashes instead of hashtags, and we grab the first 2 letters of the server (e.g., 'na1' -> 'na')
+        safe_id = riot_id.replace('#', '-').replace(' ', '%20')
+        opgg_url = f"https://www.op.gg/summoners/{server[:2].lower()}/{safe_id}"
+
+        value = (
+            f"> 🏅 **Rank:** `{rank}`  |  [🔗 OP.GG]({opgg_url})\n"
+            f"> 🔮 **Rune:** `{keystone_display}`\n"
+            f"> 🗡️ **Mastery:** `{mastery:,}` pts{tag_display}"
+        )
 
         embed.add_field(
-            name=f"⚔️ {c_name}{keystone_display} - {riot_id}",
-            value=f"**Rank:** {rank}\n**Mastery:** {mastery:,} pts{tag_display}",
+            name=f"⚔️ {c_name}  •  {riot_id}",
+            value=value,
             inline=False
         )
 

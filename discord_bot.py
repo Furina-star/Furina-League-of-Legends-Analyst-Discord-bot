@@ -148,6 +148,10 @@ if __name__ == "__main__":
     @bot.event
     async def on_ready():
         logger.info(f"Logged in as {bot.user.name}")
+
+        # Give a status for the bot just a nice touch
+        await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="Hardstuck Iron"))
+
         logger.info("Furina is Online and Ready!")
 
     bot.run(config.DISCORD_TOKEN)
