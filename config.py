@@ -39,6 +39,10 @@ OTP_MAX_CAP = 500000
 OTP_BUFF_MULTIPLIER = 0.01
 BASE_WINRATE = 0.50
 
+# ML Hyperparameters
+EMBEDDING_DIM = 16
+DROPOUT_RATE = 0.25
+
 # The Directories
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 

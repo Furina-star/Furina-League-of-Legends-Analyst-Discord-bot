@@ -11,6 +11,7 @@ import requests
 import json
 import os
 import logging
+import config
 from ai_wrapper import Model, calculate_team_synergy
 
 # Get the logging system
@@ -102,7 +103,7 @@ test_dataset = TensorDataset(x_c_test_t, x_s_test_t, x_m_test_t, y_test_t)
 test_loader = DataLoader(test_dataset, batch_size=1024, shuffle=False, num_workers=0)
 
 # Start Training
-model = Model(num_unique_champions)
+model = Model(num_unique_champions, embedding_dim=config.EMBEDDING_DIM, dropout_rate=config.DROPOUT_RATE)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
 criterion = nn.BCELoss()
 

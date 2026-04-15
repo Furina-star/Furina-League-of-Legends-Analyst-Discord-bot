@@ -15,29 +15,28 @@ logger = logging.getLogger(__name__)
 
 # Define the Model Architecture
 class Model(nn.Module):
-    def __init__(self, num_champions, embedding_dim=16, num_champs_in_match=10, num_extra_features=12):
+    def __init__(self, num_champions, embedding_dim=16, num_champs_in_match=10,
+                 num_extra_features=12, dropout_rate=0.25):
         super().__init__()
         self.embedding = nn.Embedding(num_embeddings=num_champions, embedding_dim=embedding_dim)
 
-        # Dynamically calculate the flattened tensor size
-        # 10 champs * 16 dim = 160 + 12 extra features (2 synergy + 10 meta)
         input_size = (num_champs_in_match * embedding_dim) + num_extra_features
 
         self.net = nn.Sequential(
             nn.Linear(input_size, 256),
             nn.BatchNorm1d(256),
             nn.ReLU(),
-            nn.Dropout(0.25),
+            nn.Dropout(dropout_rate),
 
             nn.Linear(256, 128),
             nn.BatchNorm1d(128),
             nn.ReLU(),
-            nn.Dropout(0.25),
+            nn.Dropout(dropout_rate),
 
             nn.Linear(128, 64),
             nn.BatchNorm1d(64),
             nn.ReLU(),
-            nn.Dropout(0.25),
+            nn.Dropout(dropout_rate),
 
             nn.Linear(64, 1),
             nn.Sigmoid()
@@ -85,7 +84,7 @@ class LeagueAI:
             self.known_classes = set(self.champ_encoder.keys())
 
             num_champs = len(self.known_classes)
-            self.model = Model(num_champs)
+            self.model = Model(num_champions=num_champs, embedding_dim=self.config.get('EMBEDDING_DIM', 16), dropout_rate=self.config.get('DROPOUT_RATE', 0.25))
             load_model(self.model, model_path)
             self.model.eval()
 
@@ -129,6 +128,63 @@ class LeagueAI:
             prediction = self.model(x_tensor, synergy_tensor, meta_tensor).item()
 
         return prediction, 1.0 - prediction, blue_synergy, red_synergy
+
+    # This function batch 50 drafts and send it through the model exactly once
+    def predict_batch(self, drafts_list: List[Dict[str, str]]) -> List[Tuple[float, float, float, float]]:
+        all_encoded = []
+        all_synergies = []
+        all_metas = []
+
+        correct_order = [
+            'blueTopChamp', 'blueJungleChamp', 'blueMiddleChamp', 'blueADCChamp', 'blueSupportChamp',
+            'redTopChamp', 'redJungleChamp', 'redMiddleChamp', 'redADCChamp', 'redSupportChamp'
+        ]
+
+        # Loop to gather data, NOT to run PyTorch
+        for draft_dict in drafts_list:
+            raw_champs = [draft_dict.get(col, 'Unknown') for col in correct_order]
+
+            # Use the JSON dictionary we made earlier
+            encoded_list = [self.champ_encoder.get(champ, 0) for champ in raw_champs]
+
+            blue_champs = raw_champs[:5]
+            red_champs = raw_champs[5:]
+
+            # Use the injected config we made earlier
+            blue_synergy = calculate_team_synergy(blue_champs, self.synergy_matrix, self.config['BASE_WINRATE'])
+            red_synergy = calculate_team_synergy(red_champs, self.synergy_matrix, self.config['BASE_WINRATE'])
+
+            meta_list = [self.meta_db.get(champ, self.config['BASE_WINRATE']) for champ in raw_champs]
+
+            all_encoded.append(encoded_list)
+            all_synergies.append([blue_synergy, red_synergy])
+            all_metas.append(meta_list)
+
+        if not drafts_list:
+            return []
+
+        # Convert everything into 3 giant tensors
+        x_tensor = torch.tensor(all_encoded, dtype=torch.long)
+        synergy_tensor = torch.tensor(all_synergies, dtype=torch.float32)
+        meta_tensor = torch.tensor(all_metas, dtype=torch.float32)
+
+        # Run the model exactly once
+        with torch.no_grad():
+            predictions = self.model(x_tensor, synergy_tensor, meta_tensor).squeeze(-1).tolist()
+
+        # Failsafe if the batch only had 1 item and PyTorch stripped the list
+        if isinstance(predictions, float):
+            predictions = [predictions]
+
+        # Package the results
+        results = []
+        for i in range(len(predictions)):
+            pred = predictions[i]
+            blue_syn = all_synergies[i][0]
+            red_syn = all_synergies[i][1]
+            results.append((pred, 1.0 - pred, blue_syn, red_syn))
+
+        return results
 
     # This function calculates the winrates
     def apply_hybrid_algorithm(self, base_blue_prob: float, blue_winrates: List[float],
@@ -260,29 +316,34 @@ class LeagueAI:
             target_role, role_db, blue_dict, red_dict, banned_champs or []
         )
 
-        # Determine currently locked allies exactly once
         allies = [c for c in (blue_dict.values() if is_blue else red_dict.values()) if c != "Unknown"]
-        results = []
 
-        # Simulate
+        # Build the batch of drafts
+        draft_batch = []
         for champ in valid_champions:
             test_blue, test_red = blue_dict.copy(), red_dict.copy()
-
             if is_blue:
                 test_blue[target_role] = champ
             else:
                 test_red[target_role] = champ
+            draft_batch.append(self._build_draft_input(test_blue, test_red))
 
-            try:
-                # 🔥 All the messy logic is perfectly delegated to helpers!
-                draft_dict = self._build_draft_input(test_blue, test_red)
-                prediction = self.predict_match(draft_dict)
-                win_prob = prediction[0] if is_blue else prediction[1]
-                reason = self._determine_pick_reason(champ, allies)
+        if not draft_batch:
+            return []
 
-                results.append((champ, win_prob, reason))
-            except Exception as e:
-                logger.error(f"AI Coach Simulation failed for {champ}: {e}")
+        # Send the entire batch to PyTorch at once
+        try:
+            batch_predictions = self.predict_batch(draft_batch)
+        except Exception as e:
+            logger.error(f"Batch AI Coach Simulation failed: {e}")
+            return []
+
+        # Process the results natively
+        results = []
+        for champ, prediction in zip(valid_champions, batch_predictions):
+            win_prob = prediction[0] if is_blue else prediction[1]
+            reason = self._determine_pick_reason(champ, allies)
+            results.append((champ, win_prob, reason))
 
         results.sort(key=lambda x: x[1], reverse=True)
         return results[:3]
