@@ -6,7 +6,7 @@ By centralizing database operations in this class, we can ensure consistent data
 
 import aiosqlite
 import logging
-
+    
 # Get the logging system
 logger = logging.getLogger(__name__)
 

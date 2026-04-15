@@ -159,7 +159,7 @@ def build_lastgame_embed(server: str, riot_id: str, stats: dict, patch_version: 
     return embed
 
 # For the draft coach command
-def build_draft_embed(role: str, user_team: str, error_msg: str | None, top_picks: list, blue_dict: dict, red_dict: dict, role_db: dict,) -> discord.Embed:
+def build_draft_embed(role: str, user_team: str, error_msg: str | None, top_picks: list, blue_dict: dict, red_dict: dict, role_db: dict) -> discord.Embed:
     desc = f"Simulating optimal **{role.title()}** picks for the **{user_team}** side."
     if error_msg:
         desc = f"🚨 **ERROR: {error_msg}**\n\n" + desc

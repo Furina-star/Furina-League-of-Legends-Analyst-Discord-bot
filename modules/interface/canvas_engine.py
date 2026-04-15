@@ -97,8 +97,6 @@ async def fetch_icon(session: aiohttp.ClientSession, champ: str) -> Image.Image:
     if champ == "Unknown" or "(You)" in champ:
         return Image.new("RGBA", (80, 80), BG_COLOR)
 
-    if champ == "MonkeyKing": champ = "Wukong"
-
     filepath = os.path.join(CACHE_DIR, f"{champ}.png")
 
     if not os.path.exists(filepath):

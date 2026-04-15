@@ -236,7 +236,6 @@ class DraftCommands(commands.Cog):
             blue_dict=empty_dict,
             red_dict=empty_dict,
             role_db=self.role_db,
-            banned_champs=[]
         )
 
         image_buffer = await render_draft_board(

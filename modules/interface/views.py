@@ -238,15 +238,14 @@ class LiveDraftDashboard(discord.ui.View):
             blue_dict=self.blue_dict,
             red_dict=self.red_dict,
             role_db=self.role_db,
-            banned_champs=self.banned_champs
         )
 
         image_buffer = await render_draft_board(
-            self.blue_dict,
-            self.red_dict,
-            self.role,
-            self.user_team,
-            self.banned_champs
+            blue_dict=self.blue_dict,
+            red_dict=self.red_dict,
+            role=self.role,
+            user_team=self.user_team,
+            banned_champs=self.banned_champs
         )
         file = discord.File(fp=image_buffer, filename="draft_board.png")
 
@@ -280,8 +279,8 @@ class BanInputModal(discord.ui.Modal):
         raw_inputs = [c.strip() for c in self.champ_input.value.split(',') if c.strip()]
 
         # Enforce 1 to 5 champions per submission
-        if len(raw_inputs) > 5:
-            self.dashboard.error_msg = "You can only add up to 5 bans at a time!"
+        if len(raw_inputs) > 10:
+            self.dashboard.error_msg = "You can only add up to 10 bans at a time!"
             return await self.dashboard.update_dashboard(interaction)
 
         # Enforce the absolute 10-ban limit
