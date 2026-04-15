@@ -8,10 +8,10 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import logging
-from modules.interface.embed_formatter import build_predict_embeds, build_scout_embed, build_draft_embed
-from modules.interface.views import PredictView, LiveDraftDashboard
+from modules.interface.embed_formatter import build_predict_embed, build_scout_embed, build_draft_embed
+from modules.interface.views import LiveDraftDashboard
 from discord.utils import escape_mentions
-from modules.utils.parsers import parse_riot_id, sort_team_roles, format_team_display
+from modules.utils.parsers import parse_riot_id, sort_team_roles
 from modules.interface.discord_helpers import server_autocomplete
 from modules.interface.canvas_engine import render_draft_board
 
@@ -82,10 +82,6 @@ class DraftCommands(commands.Cog):
                 await interaction.followup.send("⚠️ **Not enough players!** I only calculate full 5v5 matches.")
                 return
 
-            # Use our new helper to format the display!
-            blue_display = format_team_display(blue_picks, raw_blue_team, self.meta_db, self.champ_dict)
-            red_display = format_team_display(red_picks, raw_red_team, self.meta_db, self.champ_dict)
-
             # Get the Champion picks and set them in order
             draft_dict = {
                 'blueTopChamp': blue_picks[0], 'blueJungleChamp': blue_picks[1], 'blueMiddleChamp': blue_picks[2],
@@ -111,14 +107,46 @@ class DraftCommands(commands.Cog):
             )
 
             # Send the results
-            blue_embed, red_embed = build_predict_embeds(
+            positions = ['top', 'jungle', 'mid', 'adc', 'support']
+            blue_dict = dict(zip(positions, blue_picks))
+            red_dict = dict(zip(positions, red_picks))
+
+            # Get the player names
+            def get_names(sorted_picks, raw_team):
+                names = []
+                for pick in sorted_picks:
+                    player = next((p for p in raw_team if self.champ_dict.get(str(p['championId']), 'Unknown') == pick),
+                                  None)
+                    if player:
+                        names.append(player.get('riotIdGameName') or player.get('summonerName') or "Unknown")
+                    else:
+                        names.append("Unknown")
+                return names
+
+            # Map the extracted names to standard positions
+            blue_names = dict(zip(positions, get_names(blue_picks, raw_blue_team)))
+            red_names = dict(zip(positions, get_names(red_picks, raw_red_team)))
+
+            image_buffer = await render_draft_board(
+                blue_dict=blue_dict,
+                red_dict=red_dict,
+                role="None",
+                user_team="None",
+                blue_names = blue_names,
+                red_names = red_names,
+                blue_prob = final_blue_prob,
+                red_prob = final_red_prob
+            )
+
+            file = discord.File(fp=image_buffer, filename="draft_board.png")
+            embed = build_predict_embed(
                 final_blue_prob, final_red_prob,
                 avg_blue_wr, avg_red_wr,
                 blue_syn, red_syn,
-                blue_display, red_display
+                match_data
             )
-            view = PredictView(blue_embed, red_embed)
-            await interaction.followup.send(embed=blue_embed, view=view)
+
+            await interaction.followup.send(embed=embed, file=file)
 
         # Error for Riot API issues, like if the servers are down or something.
         except aiohttp.ClientError:

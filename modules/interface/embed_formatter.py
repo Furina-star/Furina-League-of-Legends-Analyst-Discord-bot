@@ -4,11 +4,11 @@ It takes in the relevant data and constructs a Discord Embed object with the app
 """
 
 import discord
-from typing import List, Tuple
 from modules.utils.parsers import ParsedStats
 from modules.persona.tags import get_pregame_tags, get_performance_tags, get_draft_warnings
 from modules.persona.verdicts import generate_furina_verdict
 from modules.utils.data_loader import ITEM_DB, RUNE_DB, SPELL_DB
+from config import QUEUE_MAP
 import logging
 
 # Get the logging system
@@ -42,28 +42,26 @@ def build_help_embed() -> discord.Embed:
     return embed
 
 # For predict commands in cogs
-def build_predict_embeds(blue_prob: float, red_prob: float, avg_blue_wr: float, avg_red_wr: float, blue_synergy: float, red_synergy: float, blue_display: List[str], red_display: List[str]) -> Tuple[discord.Embed, discord.Embed]:
-    description = f"**Blue Win Chance:** {blue_prob * 100:.1f}%\n**Red Win Chance:** {red_prob * 100:.1f}%"
+def build_predict_embed(blue_prob: float, red_prob: float, avg_blue_wr: float, avg_red_wr: float, blue_synergy: float, red_synergy: float, match_data: dict) -> discord.Embed:
+    queue_id = match_data.get('gameQueueConfigId')
+    game_mode = QUEUE_MAP.get(queue_id) or QUEUE_MAP.get(str(queue_id)) or match_data.get('gameMode', 'Unknown Mode')
+    match_id = match_data.get('gameId', 'Unknown ID')
 
-    # Blue
-    blue_embed = discord.Embed(title="🔴 LIVE MATCH PREDICTION", description=description, color=discord.Color.blue())
-    blue_text = (
-            f"*(Avg WR: {avg_blue_wr:.1f}%)*\n"
-            f"*(Synergy: {blue_synergy * 100:+.1f})*\n\n"
-            f"**Draft:**\n" + "\n".join(blue_display)
+    description = (
+        f"**🟦 Blue Win Chance:** {blue_prob * 100:.1f}% *(Avg WR: {avg_blue_wr:.1f}% | Synergy: {blue_synergy * 100:+.1f})*\n"
+        f"**🟥 Red Win Chance:** {red_prob * 100:.1f}% *(Avg WR: {avg_red_wr:.1f}% | Synergy: {red_synergy * 100:+.1f})*"
     )
-    blue_embed.add_field(name="🟦 Blue Team Data", value=blue_text, inline=False)
 
-    # Red
-    red_embed = discord.Embed(title="🔴 LIVE MATCH PREDICTION", description=description, color=discord.Color.red())
-    red_text = (
-            f"*(Avg WR: {avg_red_wr:.1f}%)*\n"
-            f"*(Synergy: {red_synergy * 100:+.1f})*\n\n"
-            f"**Draft:**\n" + "\n".join(red_display)
+    embed = discord.Embed(
+        title="🔴 LIVE MATCH PREDICTION",
+        description=description,
+        color=discord.Color.dark_purple()
     )
-    red_embed.add_field(name="🟥 Red Team Data", value=red_text, inline=False)
 
-    return blue_embed, red_embed
+    embed.set_image(url="attachment://draft_board.png")
+    embed.set_footer(text=f"Mode: {game_mode} | Match ID: {match_id}")
+
+    return embed
 
 # For scout command in cogs
 def build_scout_embed(server: str, game_name: str, bots: list, players: list, meta_db: dict) -> discord.Embed:

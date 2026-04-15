@@ -215,7 +215,7 @@ class RiotAPIClient:
         return "\n".join(results) if results else "Unranked"
 
     # Fetches mastery and rank concurrently for a team.
-    async def _fetch_team_stats(self, players, server):
+    async def fetch_team_stats(self, players, server):
         async def fetch_rank_safe(puuid):
             return await self.get_summoner_rank(puuid, platform_override=server)
 
@@ -271,7 +271,7 @@ class RiotAPIClient:
         return c_name, riot_id, rank, mastery, history, keystone_name, is_otp, is_autofilled
 
     # Initiate fetching enemy data as a function, this is where we get the mastery, rank, and match history for each enemy player, and also check if any of them are duos.
-    async def _fetch_enemy_data(self, match_data, enemy_team_id, server, region, champ_dict, keystone_db, role_db):
+    async def fetch_enemy_data(self, match_data, enemy_team_id, server, region, champ_dict, keystone_db, role_db):
         bot_entries = []
         player_tasks = []
 

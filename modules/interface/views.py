@@ -7,23 +7,6 @@ from modules.interface.embed_formatter import build_lastgame_embed, build_draft_
 from modules.utils.parsers import extract_postgame_stats, quick_resolve_champion
 from modules.interface.canvas_engine import render_draft_board
 
-# This class handles the button for '/predict'
-class PredictView(discord.ui.View):
-    def __init__(self, blue_embed: discord.Embed, red_embed: discord.Embed):
-        super().__init__(timeout=180)
-        self.blue_embed = blue_embed
-        self.red_embed = red_embed
-
-    @discord.ui.button(label="Blue Team Draft", style=discord.ButtonStyle.blurple, custom_id="btn_blue")
-    async def blue_button(self, interaction: discord.Interaction, _button: discord.ui.Button):
-        # Instantly swap the embed to the Blue Team version
-        await interaction.response.edit_message(embed=self.blue_embed)
-
-    @discord.ui.button(label="Red Team Draft", style=discord.ButtonStyle.red, custom_id="btn_red")
-    async def red_button(self, interaction: discord.Interaction, _button: discord.ui.Button):
-        # Instantly swap the embed to the Red Team version
-        await interaction.response.edit_message(embed=self.red_embed)
-
 # This class handles the button for '/postgame'
 class MatchCycleView(discord.ui.View):
     def __init__(self, riot_client, puuid, server, region, history, current_index, bot_version, full_riot_id):
