@@ -28,7 +28,7 @@ def build_help_embed() -> discord.Embed:
 
     # The Court and Hall of Shame
     embed.add_field(name="🔗 `/link`", value="Link your Riot ID to the Oratrice for Hall of Shame tracking.\n**Requires:** Server and Riot ID", inline=False)
-    embed.add_field(name="✂️ `/unlink`", value="Sever your ties with the Oratrice and wipe your records clean.", inline=False)
+    embed.add_field(name="✂️ `/unlink`", value="Sever your ties and Furina will wipe your records clean.", inline=False)
     embed.add_field(name="🏛️ `/hallofshame`", value="View the server's most tragic League of Legends performers this week.", inline=False)
     embed.add_field(name="⚖️ `/trial`", value="Judge who truly threw the game and deliver a final verdict.", inline=False)
     embed.add_field(name="🗣 `/confess`", value="Admit your horrific misplays and beg the Oratrice for mercy.", inline=False)
@@ -37,6 +37,11 @@ def build_help_embed() -> discord.Embed:
     embed.add_field(name="⚔️ `/predict`",value="Calculates win probability for a live match.\n**Requires:** Server and Riot ID",inline=False)
     embed.add_field(name="🕵️ `/scout`",value="Builds an enemy dossier for a live match.\n**Requires:** Server and Riot ID", inline=False)
     embed.add_field(name="🏆 `/postgame`",value="Ruthlessly analyzes your most recent match, including lane rival diff and performance grades.\n**Requires:** Server and Riot ID",inline=False)
+
+    # Live Match
+    embed.add_field(name="👑 Admin Configuration", value="**`/setup_broadcast`** — Automatically builds the `#live-matches` infrastructure so the Oratrice can track and announce linked players entering live games.", inline=False)
+
+    # Footer
     embed.set_footer(text="Valid servers: NA1, EUW1, EUN1, KR, SG2, TW2, VN2, TH2, PH2, BR1, LAN1, LAS1, OC1, TR1, RU")
 
     return embed

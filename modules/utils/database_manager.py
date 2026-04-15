@@ -91,6 +91,12 @@ class DatabaseManager:
                                     (str(discord_id),)) as cursor:
                 return await cursor.fetchone()
 
+    # Get all linked accounts
+    async def get_all_linked_accounts(self):
+        async with aiosqlite.connect(self.db_path) as conn:
+            async with conn.execute("SELECT discord_id, puuid, riot_id FROM linked_accounts") as cursor:
+                return await cursor.fetchall()
+
     # Fetches the worst stats from the past 7 days
     async def get_hall_of_shame(self):
         async with aiosqlite.connect(self.db_path) as conn:

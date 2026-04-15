@@ -63,7 +63,8 @@ class DiscordBot(commands.Bot):
                 "cogs.draft_commands",
                 "cogs.general_commands",
                 "cogs.stats_commands",
-                "cogs.leaderboard_commands"
+                "cogs.leaderboard_commands",
+                "cogs.live_tracker"
             ]
 
             logger.info("Starting extension load...")
