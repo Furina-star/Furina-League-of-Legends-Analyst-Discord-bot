@@ -3,11 +3,12 @@ This part of the Discord  League Analyst Bot
 is all about the draft commands,
 commands that analyze the live game, predict the win condition, and scout the enemy team.
 """
-import aiohttp
+
 import discord
 from discord.ext import commands
 from discord import app_commands
 import logging
+import asyncio
 from modules.interface.embed_formatter import build_predict_embed, build_scout_embed, build_draft_embed
 from modules.interface.views import LiveDraftDashboard
 from discord.utils import escape_mentions
@@ -50,103 +51,89 @@ class DraftCommands(commands.Cog):
 
         # This call out the Riot ID parser
         game_name, tag_line = parse_riot_id(full_riot_id)
-
-        if not game_name:
-            await interaction.response.send_message("⚠️ Format Error! Please use: `Name#Tag` (e.g., `Doublelift#NA1`)", ephemeral=True)
+        if not game_name or not tag_line:
+            await interaction.response.send_message("⚠️ Format Error! You must include the hashtag. Example: `Doublelift#NA1`", ephemeral=True)
             return
 
         # Tell Discord to show the "Thinking..." status.
         await interaction.response.defer(thinking=True)
 
-        try:
-            # Get PUUID
-            puuid = await self.riot.get_puuid(game_name, tag_line, region_override=region)
-            if not puuid:
-                await interaction.followup.send(f"⚠️ Could not find player {game_name}#{tag_line} on {server.upper()}. Check spelling!",allowed_mentions=discord.AllowedMentions.none())
-                return
+        # Get PUUID
+        puuid = await self.riot.get_puuid(game_name, tag_line, region_override=region)
+        if not puuid:
+            await interaction.followup.send(f"⚠️ Could not find player {game_name}#{tag_line}.", allowed_mentions=discord.AllowedMentions.none())
+            return
 
-            # Get Live Match
-            match_data = await self.riot.get_live_match(puuid, platform_override=server)
-            if not match_data:
-                await interaction.followup.send("⚠️ This player is not currently in a live match!")
-                return
+        # Get Live Match
+        match_data = await self.riot.get_live_match(puuid, platform_override=server)
+        if not match_data:
+            await interaction.followup.send("⚠️ Could not fetch match data! The player is either not in a live match, or Riot's servers are currently down.")
+            return
 
-            # Sort the teams
-            raw_blue_team = [p for p in match_data['participants'] if p['teamId'] == 100]
-            raw_red_team = [p for p in match_data['participants'] if p['teamId'] == 200]
+        # Sort the teams
+        raw_blue_team = [p for p in match_data['participants'] if p['teamId'] == 100]
+        raw_red_team = [p for p in match_data['participants'] if p['teamId'] == 200]
 
-            blue_picks = sort_team_roles(raw_blue_team, self.champ_dict, self.role_db)
-            red_picks = sort_team_roles(raw_red_team, self.champ_dict, self.role_db)
+        blue_picks = sort_team_roles(raw_blue_team, self.champ_dict, self.role_db)
+        red_picks = sort_team_roles(raw_red_team, self.champ_dict, self.role_db)
 
-            if len(blue_picks) < 5 or len(red_picks) < 5:
-                await interaction.followup.send("⚠️ **Not enough players!** I only calculate full 5v5 matches.")
-                return
+        if len(blue_picks) < 5 or len(red_picks) < 5:
+            await interaction.followup.send("⚠️ **Not enough players!** I only calculate full 5v5 matches.")
+            return
 
-            # Get the Champion picks and set them in order
-            draft_dict = {
-                'blueTopChamp': blue_picks[0], 'blueJungleChamp': blue_picks[1], 'blueMiddleChamp': blue_picks[2],
-                'blueADCChamp': blue_picks[3], 'blueSupportChamp': blue_picks[4],
-                'redTopChamp': red_picks[0], 'redJungleChamp': red_picks[1], 'redMiddleChamp': red_picks[2],
-                'redADCChamp': red_picks[3], 'redSupportChamp': red_picks[4]
-            }
+        # Get the Champion picks and set them in order
+        draft_dict = {
+            'blueTopChamp': blue_picks[0], 'blueJungleChamp': blue_picks[1], 'blueMiddleChamp': blue_picks[2],
+            'blueADCChamp': blue_picks[3], 'blueSupportChamp': blue_picks[4],
+            'redTopChamp': red_picks[0], 'redJungleChamp': red_picks[1], 'redMiddleChamp': red_picks[2],
+            'redADCChamp': red_picks[3], 'redSupportChamp': red_picks[4]
+        }
 
-            # Calculate base probability
-            base_blue_prob, _, blue_syn, red_syn = self.ai.predict_match(draft_dict)
+        # Calculate base probability
+        base_blue_prob, _, blue_syn, red_syn = await asyncio.to_thread(self.ai.predict_match, draft_dict)
 
-            # Get PUUIDs, Summoner IDs, and Champion IDs for live scouting
-            blue_players = [(p['puuid'], p.get('summonerId'), p['championId']) for p in raw_blue_team]
-            red_players = [(p['puuid'], p.get('summonerId'), p['championId']) for p in raw_red_team]
+        # Get PUUIDs, Summoner IDs, and Champion IDs for live scouting
+        blue_players = [(p['puuid'], p.get('summonerId'), p['championId']) for p in raw_blue_team]
+        red_players = [(p['puuid'], p.get('summonerId'), p['championId']) for p in raw_red_team]
 
-            # Use our new helper to do the heavy asynchronous lifting!
-            blue_winrates, blue_masteries, avg_blue_wr = await self.riot.fetch_team_stats(blue_players, server)
-            red_winrates, red_masteries, avg_red_wr = await self.riot.fetch_team_stats(red_players, server)
+        # Use our new helper to do the heavy asynchronous lifting!
+        blue_winrates, blue_masteries, avg_blue_wr = await self.riot.fetch_team_stats(blue_players, server)
+        red_winrates, red_masteries, avg_red_wr = await self.riot.fetch_team_stats(red_players, server)
 
-            # Pass everything into the Hybrid Algorithm
-            final_blue_prob, final_red_prob = self.ai.apply_hybrid_algorithm(
-                base_blue_prob, blue_winrates, red_winrates, blue_masteries, red_masteries
-            )
+        # Pass everything into the Hybrid Algorithm
+        final_blue_prob, final_red_prob = await asyncio.to_thread(self.ai.apply_hybrid_algorithm, base_blue_prob, blue_winrates, red_winrates, blue_masteries, red_masteries)
 
-            # Send the results
-            positions = ['top', 'jungle', 'mid', 'adc', 'support']
-            blue_dict = dict(zip(positions, blue_picks))
-            red_dict = dict(zip(positions, red_picks))
+        # Send the results
+        positions = ['top', 'jungle', 'mid', 'adc', 'support']
+        blue_dict = dict(zip(positions, blue_picks))
+        red_dict = dict(zip(positions, red_picks))
 
-            # Map the extracted names to standard positions
-            blue_names = dict(zip(positions, extract_live_player_names(blue_picks, raw_blue_team, self.champ_dict)))
-            red_names = dict(zip(positions, extract_live_player_names(red_picks, raw_red_team, self.champ_dict)))
+        # Map the extracted names to standard positions
+        blue_names = dict(zip(positions, extract_live_player_names(blue_picks, raw_blue_team, self.champ_dict)))
+        red_names = dict(zip(positions, extract_live_player_names(red_picks, raw_red_team, self.champ_dict)))
 
-            image_buffer = await render_draft_board(
-                blue_dict=blue_dict,
-                red_dict=red_dict,
-                role="None",
-                user_team="None",
-                banned_champs=None,
-                blue_names=blue_names,
-                red_names=red_names,
-                blue_prob=final_blue_prob,
-                red_prob=final_red_prob,
-                bg_filename="predict_bg.jpg"  # Background Image
-            )
+        image_buffer = await render_draft_board(
+            blue_dict=blue_dict,
+            red_dict=red_dict,
+            role="None",
+            user_team="None",
+            banned_champs=None,
+            blue_names=blue_names,
+            red_names=red_names,
+            blue_prob=final_blue_prob,
+            red_prob=final_red_prob,
+            bg_filename="predict_bg.jpg"  # Background Image
+        )
 
-            file = discord.File(fp=image_buffer, filename="draft_board.png")
-            embed = build_predict_embed(
-                final_blue_prob, final_red_prob,
-                avg_blue_wr, avg_red_wr,
-                blue_syn, red_syn,
-                match_data
-            )
+        file = discord.File(fp=image_buffer, filename="draft_board.png")
+        embed = build_predict_embed(
+            final_blue_prob, final_red_prob,
+            avg_blue_wr, avg_red_wr,
+            blue_syn, red_syn,
+            match_data
+        )
 
-            await interaction.followup.send(embed=embed, file=file)
-
-        # Error for Riot API issues, like if the servers are down or something.
-        except aiohttp.ClientError:
-            logger.error("Network error while connecting to Riot API in predict.")
-            await interaction.followup.send("I couldn't connect to Riot's servers. They might be down or rate-limiting us!")
-
-        # Catches if Riot suddenly changes their JSON format and a key goes missing
-        except KeyError as e:
-            logger.error(f"Missing expected data from Riot API in predict: {e}")
-            await interaction.followup.send("Riot returned unexpected match data.")
+        await interaction.followup.send(embed=embed, file=file)
 
     # Getting the enemy information.
     # This part checks what type of bs the enemy team is running
@@ -166,53 +153,41 @@ class DraftCommands(commands.Cog):
 
         # This call out the Riot ID parser
         game_name, tag_line = parse_riot_id(full_riot_id)
-
-        # Same as above bouncer, yeah yeah yeah.
-        if not game_name:
-            await interaction.response.send_message("⚠️ Format Error! Please use: `Name#Tag` (e.g., `Doublelift#NA1`)", ephemeral=True)
+        if not game_name or not tag_line:
+            await interaction.response.send_message("⚠️ Format Error! You must include the hashtag. Example: `Doublelift#NA1`", ephemeral=True)
             return
 
         # Tell Discord to show the "Thinking..." status.
         await interaction.response.defer(thinking=True)
 
-        try:
-            safe_name = escape_mentions(game_name)
-            # This call out get_riot_puuid function from RiotAPIClient Class in riot_api.py.
-            puuid = await self.riot.get_puuid(game_name, tag_line, region_override=region)
-            if not puuid:
-                # Since we deferred above, we MUST use followup.send() from here on out!
-                await interaction.followup.send(f"⚠️ Could not find player {game_name}#{tag_line} on {server.upper()}. Check spelling!", allowed_mentions=discord.AllowedMentions.none())
-                return
-            # This call out get_live_match function from RiotAPIClient Class in riot_api.py.
-            match_data = await self.riot.get_live_match(puuid, platform_override=server)
-            if not match_data:
-                await interaction.followup.send("⚠️ This player is not currently in a live match!")
-                return
 
-            # Figures which team the current user is on Blue or Red.
-            user_team = next((p['teamId'] for p in match_data['participants'] if p['puuid'] == puuid), None)
-            if not user_team:
-                await interaction.followup.send("⚠️ Could not locate user in match data.")
-                return
+        safe_name = escape_mentions(game_name)
+        # This call out get_riot_puuid function from RiotAPIClient Class in riot_api.py.
+        puuid = await self.riot.get_puuid(game_name, tag_line, region_override=region)
+        if not puuid:
+            await interaction.followup.send(f"⚠️ Could not find player {game_name}#{tag_line}.", allowed_mentions=discord.AllowedMentions.none())
+            return
 
-            # Building the Discord Embed
-            enemy_team_id = 200 if user_team == 100 else 100
-            bot_entries, player_results = await self.riot.fetch_enemy_data(
-                match_data, enemy_team_id, server, region, self.champ_dict, self.keystone_db, self.role_db
-            )
-            embed = build_scout_embed(server, safe_name, bot_entries, player_results, self.ai.meta_db)
+        # This call out get_live_match function from RiotAPIClient Class in riot_api.py.
+        match_data = await self.riot.get_live_match(puuid, platform_override=server)
+        if not match_data:
+            await interaction.followup.send("⚠️ Could not fetch match data! The player is either not in a live match, or Riot's servers are currently down.")
+            return
 
-            await interaction.followup.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
+        # Figures which team the current user is on Blue or Red.
+        user_team = next((p['teamId'] for p in match_data['participants'] if p['puuid'] == puuid), None)
+        if not user_team:
+            await interaction.followup.send("⚠️ Could not locate user in match data.")
+            return
 
-        # Error for Riot API issues, like if the servers are down or something.
-        except aiohttp.ClientError:
-            logger.error("Network error while connecting to Riot API in scout.")
-            await interaction.followup.send("I couldn't connect to Riot's servers. They might be down or rate-limiting us!")
+        # Building the Discord Embed
+        enemy_team_id = 200 if user_team == 100 else 100
+        bot_entries, player_results = await self.riot.fetch_enemy_data(
+            match_data, enemy_team_id, server, region, self.champ_dict, self.keystone_db, self.role_db
+        )
+        embed = build_scout_embed(server, safe_name, bot_entries, player_results, self.ai.meta_db)
 
-        # Catches if Riot suddenly changes their JSON format and a key goes missing
-        except KeyError as e:
-            logger.error(f"Missing expected data from Riot API in scout: {e}")
-            await interaction.followup.send("Riot returned unexpected match data.")
+        await interaction.followup.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
 
     # A draft pick coach
     # This is where it suggests champions based on current draft picks
@@ -243,7 +218,7 @@ class DraftCommands(commands.Cog):
         dashboard = LiveDraftDashboard(self.ai, role.value, user_team_str, self.role_db, self.champ_dict)
 
         # Run first prediction
-        top_picks = self.ai.suggest_champion(role.value, user_team_str, empty_dict, empty_dict, self.role_db, [])
+        top_picks = await asyncio.to_thread(self.ai.suggest_champion, role.value, user_team_str, empty_dict, empty_dict, self.role_db, [])
 
         # Call the centralized formatter!
         embed = build_draft_embed(

@@ -6,12 +6,15 @@ import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 from safetensors.torch import save_file
-import skops.io as sio
 import matplotlib.pyplot as plt
 import requests
 import json
 import os
+import logging
 from ai_wrapper import Model, calculate_team_synergy
+
+# Get the logging system
+logger = logging.getLogger(__name__)
 
 # Load your CUSTOM Mined Data
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -19,24 +22,24 @@ os.chdir(BASE_DIR)
 df = pd.read_csv("data/ranked_drafts.csv")
 
 # Load the Synergy Matrix
-print("Loading Synergy Matrix...")
+logger.info("Loading Synergy Matrix...")
 with open("data/Synergy_Matrix.json", "r") as f:
     synergy_matrix = json.load(f)
 
 # Load the Meta Champions
-print("Loading Meta Database...")
+logger.info("Loading Meta Database...")
 with open("data/Meta_Champions.json", "r") as f:
     meta_db = json.load(f)
 
 # Calculate Synergy Scores for every match using Pandas (Super Fast!)
-print("Calculating Team Synergy Scores...")
+logger.info("Calculating Team Synergy Scores...")
 blue_cols = ['blueTop', 'blueJungle', 'blueMid', 'blueADC', 'blueSupport']
 red_cols = ['redTop', 'redJungle', 'redMid', 'redADC', 'redSupport']
 all_cols = blue_cols + red_cols
 
 # This applies your calculator function to every single row in the CSV and creates two new columns
-df['blueSynergy'] = df.apply(lambda row: calculate_team_synergy([str(row[c]) for c in blue_cols], synergy_matrix), axis=1)
-df['redSynergy'] = df.apply(lambda row: calculate_team_synergy([str(row[c]) for c in red_cols], synergy_matrix), axis=1)
+df['blueSynergy'] = df.apply(lambda row: calculate_team_synergy([str(row[c]) for c in blue_cols], synergy_matrix, 0.50), axis=1)
+df['redSynergy'] = df.apply(lambda row: calculate_team_synergy([str(row[c]) for c in red_cols], synergy_matrix, 0.50), axis=1)
 
 # Create a quick helper function to grab the 10 win rates for every row in the CSV
 def get_meta_rates(row):
@@ -44,7 +47,7 @@ def get_meta_rates(row):
 df['metaRates'] = df.apply(get_meta_rates, axis=1)
 
 # Grabbing every single champion out there just to be safe
-print("Downloading Master Champion List From Riot...")
+logger.info("Downloading Master Champion List From Riot...")
 version = requests.get("https://ddragon.leagueoflegends.com/api/versions.json").json()[0]
 champ_data = requests.get(f"https://ddragon.leagueoflegends.com/cdn/{version}/data/en_US/champion.json").json()
 
@@ -60,13 +63,16 @@ le = LabelEncoder()
 le.fit(all_champions)
 text_cols = [col for col in df.columns if col not in ['blueWin', 'matchId', 'blueSynergy', 'redSynergy', 'metaRates']]
 
-print("Translating CSV data...")
+logger.info("Translating CSV data...")
 for col in text_cols:
     df[col] = df[col].apply(lambda x: x if x in le.classes_ else 'Unknown')
     df[col] = le.transform(df[col].astype(str))
 
 # Save LabelEncoder using skops
-sio.dump(le, "models/label_encoder.skops")
+champion_mapping = {str(champ): int(idx) for idx, champ in enumerate(le.classes_)}
+with open("models/champion_encoder.json", "w") as f:
+    json.dump(champion_mapping, f, indent=4)
+
 num_unique_champions = len(le.classes_)
 
 x_champs = df[text_cols]
@@ -100,9 +106,9 @@ model = Model(num_unique_champions)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
 criterion = nn.BCELoss()
 
-print(f"Number of input columns: {x_champs.shape[1]}")
-print(f"Total Unique Champions found: {num_unique_champions}")
-print(f"Training on {len(x_c_train)} matches, Validating on {len(x_c_test)} matches...\n")
+logger.info(f"Number of input columns: {x_champs.shape[1]}")
+logger.info(f"Total Unique Champions found: {num_unique_champions}")
+logger.info(f"Training on {len(x_c_train)} matches, Validating on {len(x_c_test)} matches...\n")
 
 # Tracker for epochs
 best_val_loss = float('inf')
@@ -137,13 +143,13 @@ for epoch in range(num_epochs):
 
         # Save PyTorch weights using safetensors
         save_file(model.state_dict(), "models/Lol_draft_predictor.safetensors")
-        print(f"Epoch [{epoch + 1}/{num_epochs}]  |  Train Loss: {avg_train_loss:.4f}  |  Val Loss: {avg_val_loss:.4f} ⭐ (New Best!)")
+        logger.info(f"Epoch [{epoch + 1}/{num_epochs}]  |  Train Loss: {avg_train_loss:.4f}  |  Val Loss: {avg_val_loss:.4f} ⭐ (New Best!)")
     else:
         patience_counter += 1
-        print(f"Epoch [{epoch + 1}/{num_epochs}]  |  Train Loss: {avg_train_loss:.4f}  |  Val Loss: {avg_val_loss:.4f}  |  Strikes: {patience_counter}/{patience}")
+        logger.info(f"Epoch [{epoch + 1}/{num_epochs}]  |  Train Loss: {avg_train_loss:.4f}  |  Val Loss: {avg_val_loss:.4f}  |  Strikes: {patience_counter}/{patience}")
 
         if patience_counter >= patience:
-            print(f"\nEarly stopping triggered! AI peaked at Epoch {epoch + 1 - patience}.")
+            logger.info(f"\nEarly stopping triggered! AI peaked at Epoch {epoch + 1 - patience}.")
             break
 
 # Evaluation & Confusion Matrix
@@ -157,7 +163,7 @@ y_pred = predicted_classes.numpy()
 
 # Calculate and print accuracy!
 acc = accuracy_score(y_true, y_pred) * 100
-print(f"\nFinal Test Accuracy: {acc:.2f}%")
+logger.info(f"\nFinal Test Accuracy: {acc:.2f}%")
 
 # Draw Confusion Matrix
 cm = confusion_matrix(y_true, y_pred)
@@ -170,4 +176,4 @@ os.makedirs("results", exist_ok=True)
 plt.savefig('results/confusion_matrix.png', dpi=300, bbox_inches='tight')
 plt.close()
 
-print("Confusion matrix saved as 'confusion_matrix.png'")
+logger.info("Confusion matrix saved as 'confusion_matrix.png'")

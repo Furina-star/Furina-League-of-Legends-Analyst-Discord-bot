@@ -14,7 +14,6 @@ sentry-sdk==2.58.0
 torch==2.11.0
 safetensors==0.7.0
 scikit-learn==1.8.0
-skops==0.13.0
 matplotlib==3.10.8
 pandas==3.0.2
 aiofiles==25.1.0

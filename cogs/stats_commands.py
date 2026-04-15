@@ -42,74 +42,70 @@ class StatsCommands(commands.Cog):
 
         # This call out the Riot ID parser
         game_name, tag_line = parse_riot_id(full_riot_id)
-
-        if not game_name:
-            await interaction.response.send_message(
-                "⚠️ Format Error! Please use: `Name#Tag` (e.g., `Doublelift#NA1`)", ephemeral=True)
+        if not game_name or not tag_line:
+            await interaction.response.send_message("⚠️ Format Error! You must include the hashtag. Example: `Doublelift#NA1`", ephemeral=True)
             return
 
         # Tell Discord to show the "Thinking..." status.
         await interaction.response.defer(thinking=True)
 
+        # Get the puuid
+        puuid = await self.riot.get_puuid(game_name, tag_line, region_override=region)
+        if not puuid:
+            await interaction.followup.send(
+                "⚠️ Could not find player. Check spelling!",allowed_mentions=discord.AllowedMentions.none())
+            return
+
+        # Get the most recent match ID
+        history = await self.riot.get_match_history(puuid, count=10, region_override=region, server_context=server)
+        if history is None:
+            await interaction.followup.send("⚠️ Riot API failed to respond. Servers might be down!")
+            return
+        if not history:
+            await interaction.followup.send("⚠️ This player has no recent ranked games.")
+            return
+
+        match_data = await self.riot.get_match_details(history[0], region_override=region, server_context=server)
+        if not match_data:
+            await interaction.followup.send("⚠️ Could not fetch match details. Riot's servers might be unreachable.")
+            return
+
+        # Find the player's stats in the match data, map the queue ID, and calculate the total kills for that team
+        player_stats = extract_postgame_stats(match_data, puuid, history[0])
+
+        if not player_stats:
+            await interaction.followup.send("⚠️ Error parsing player data.")
+            return
+
+        # Inject the data into the database for the Hall of Shame
         try:
-            # Get the puuid
-            puuid = await self.riot.get_puuid(game_name, tag_line, region_override=region)
-            if not puuid:
-                await interaction.followup.send(
-                    "⚠️ Could not find player. Check spelling!",allowed_mentions=discord.AllowedMentions.none())
-                return
+            # Get the queue type and duration from the raw match info
+            queue_id = match_data.get('info', {}).get('queueId', 0)
+            game_duration = match_data.get('info', {}).get('gameDuration', 0)
+            is_eligible, _ = resolve_match_eligibility(game_duration, queue_id)
 
-            # Get the most recent match ID
-            history = await self.riot.get_match_history(puuid, count=10, region_override=region, server_context=server)
-            if not history:
-                await interaction.followup.send("⚠️ This player has no recent games.")
-                return
+            if is_eligible:
+                db_manager = self.bot.db
+                linked_discord_id = await db_manager.get_discord_id_by_puuid(puuid)
 
-            match_data = await self.riot.get_match_details(history[0], region_override=region, server_context=server)
-            if not match_data:
-                await interaction.followup.send("⚠️ Could not fetch match details for this game.")
-                return
-
-            # Find the player's stats in the match data, map the queue ID, and calculate the total kills for that team
-            player_stats = extract_postgame_stats(match_data, puuid, history[0])
-
-            if not player_stats:
-                await interaction.followup.send("⚠️ Error parsing player data.")
-                return
-
-            # Inject the data into the database for the Hall of Shame
-            try:
-                # Get the queue type and duration from the raw match info
-                queue_id = match_data.get('info', {}).get('queueId', 0)
-                game_duration = match_data.get('info', {}).get('gameDuration', 0)
-                is_eligible, _ = resolve_match_eligibility(game_duration, queue_id)
-
-                if is_eligible:
-                    db_manager = self.bot.db
-                    linked_discord_id = await db_manager.get_discord_id_by_puuid(puuid)
-
-                    if linked_discord_id:
-                        challenges = player_stats.get('challenges', {})
-                        await db_manager.log_match(
-                            discord_id=linked_discord_id,
-                            match_id=history[0],
-                            kp=challenges.get('killParticipation', 0),
-                            deaths=player_stats.get('deaths', 0),
-                            gpm=challenges.get('goldPerMinute', 0),
-                            dpm=challenges.get('damagePerMinute', 0),
-                            win=player_stats.get('win', False)
-                        )
-            except Exception as e:
-                logger.error(f"Hall of Shame DB Error: {e}")
-
-            # Build the embed and send the Roast/Praise embed
-            embed = build_lastgame_embed(server, full_riot_id, player_stats, self.bot.patch_version)
-            view = MatchCycleView(self.riot, puuid, server, region, history, 0, self.bot.patch_version, full_riot_id)
-            await interaction.followup.send(embed=embed, view=view)
-
+                if linked_discord_id:
+                    challenges = player_stats.get('challenges', {})
+                    await db_manager.log_match(
+                        discord_id=linked_discord_id,
+                        match_id=history[0],
+                        kp=challenges.get('killParticipation', 0),
+                        deaths=player_stats.get('deaths', 0),
+                        gpm=challenges.get('goldPerMinute', 0),
+                        dpm=challenges.get('damagePerMinute', 0),
+                        win=player_stats.get('win', False)
+                    )
         except Exception as e:
-            logger.error(f"Error in lastgame command: {e}")
-            await interaction.followup.send("⚠️ A critical error occurred while fetching the match data.")
+            logger.error(f"Hall of Shame DB Error: {e}")
+
+        # Build the embed and send the Roast/Praise embed
+        embed = build_lastgame_embed(server, full_riot_id, player_stats, self.bot.patch_version)
+        view = MatchCycleView(self.riot, puuid, server, region, history, 0, self.bot.patch_version, full_riot_id)
+        await interaction.followup.send(embed=embed, view=view)
 
 async def setup(bot):
     await bot.add_cog(StatsCommands(bot, bot.riot_client, bot.server_dict))

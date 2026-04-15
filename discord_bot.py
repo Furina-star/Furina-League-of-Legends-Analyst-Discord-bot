@@ -25,6 +25,19 @@ from modules.utils.database_manager import DatabaseManager
 # Get the logging system
 logger = initialize_logger()
 
+# Package your constants into a safe dictionary
+bot_config_dict = {
+    'BASE_WINRATE': config.BASE_WINRATE,
+    'FIRST_TIME_THRESHOLD': config.FIRST_TIME_THRESHOLD,
+    'FIRST_TIME_PENALTY': config.FIRST_TIME_PENALTY,
+    'OTP_THRESHOLD': config.OTP_THRESHOLD,
+    'OTP_MAX_CAP': config.OTP_MAX_CAP,
+    'OTP_BUFF_MULTIPLIER': config.OTP_BUFF_MULTIPLIER
+}
+
+# Inject the dependency
+ai_system = LeagueAI(bot_config=bot_config_dict)
+
 # Creating a subclass of commands.Bot
 class DiscordBot(commands.Bot):
     def __init__(self):
@@ -139,6 +152,7 @@ if __name__ == "__main__":
         config.META_PATH: "data/convert_data/build_meta.py",
         config.ROLES_PATH: "data/convert_data/update_roles.py",
         config.SYNERGY_PATH: "data/convert_data/build_synergy_matrix.py",
+        config.ENCODER_PATH: "data/convert_data/build_encoder.py",
     }
     for filepath, script in required_data_files.items():
         if not os.path.exists(filepath):

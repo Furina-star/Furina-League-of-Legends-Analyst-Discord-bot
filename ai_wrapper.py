@@ -4,25 +4,27 @@ This is where AI logic functions are stored, such as loading the model, preproce
 
 import torch
 import torch.nn as nn
-import skops.io as sio
 from safetensors.torch import load_model
 import json
 from itertools import combinations
 import logging
 from typing import List, Tuple, Dict, Any
-import config
 
 # Get the logging system
 logger = logging.getLogger(__name__)
 
 # Define the Model Architecture
 class Model(nn.Module):
-    def __init__(self, num_champions):
+    def __init__(self, num_champions, embedding_dim=16, num_champs_in_match=10, num_extra_features=12):
         super().__init__()
-        self.embedding = nn.Embedding(num_embeddings=num_champions, embedding_dim=16)
+        self.embedding = nn.Embedding(num_embeddings=num_champions, embedding_dim=embedding_dim)
+
+        # Dynamically calculate the flattened tensor size
+        # 10 champs * 16 dim = 160 + 12 extra features (2 synergy + 10 meta)
+        input_size = (num_champs_in_match * embedding_dim) + num_extra_features
 
         self.net = nn.Sequential(
-            nn.Linear(172, 256),
+            nn.Linear(input_size, 256),
             nn.BatchNorm1d(256),
             nn.ReLU(),
             nn.Dropout(0.25),
@@ -47,15 +49,13 @@ class Model(nn.Module):
         combined = torch.cat((flattened, synergy_scores, meta_rates), dim=1)
         return self.net(combined)
 
-def calculate_team_synergy(team_champs: List[str], synergy_matrix: Dict[str, Any]) -> float:
+def calculate_team_synergy(team_champs: List[str], synergy_matrix: Dict[str, Any], base_winrate: float) -> float:
     score = 0.0
     for duo in combinations(sorted(team_champs), 2):
         pair_key = f"{duo[0]}-{duo[1]}"
 
         if pair_key in synergy_matrix:
-            # If the pair has a 54% winrate, (0.54 - 0.50) = +0.04 points
-            # If the pair has a 45% winrate, (0.45 - 0.50) = -0.05 points
-            score += (synergy_matrix[pair_key]["winrate"] - config.BASE_WINRATE)
+            score += (synergy_matrix[pair_key]["winrate"] - base_winrate)
 
     return score
 
@@ -63,34 +63,37 @@ def calculate_team_synergy(team_champs: List[str], synergy_matrix: Dict[str, Any
 class LeagueAI:
     # This function set up and load Label encoder and the model
     def __init__(self,
+                 bot_config: dict,
                  model_path: str = "models/Lol_draft_predictor.safetensors",
-                 encoder_path: str = "models/label_encoder.skops",
-                 synergy_path: str = config.SYNERGY_PATH,
-                 meta_path: str = config.META_PATH):
+                 encoder_path: str = "models/champion_encoder.json",
+                 synergy_path: str = "data/Synergy_Matrix.json",
+                 meta_path: str = "data/Meta_Champions.json"):
 
-        logger.info("Loading AI Model, Label Encoder, Synergy Matrix, and Meta DB...")
+        logger.info("Loading AI parameters...")
+        self.config = bot_config
+        self.ai_ready = False
 
-        # Load the Label encoder using skops (Blocks malicious code execution)
-        safe_types = sio.get_untrusted_types(file=encoder_path)
-        self.le = sio.load(encoder_path, trusted=safe_types)
+        try:
+            with open(synergy_path, "r") as f:
+                self.synergy_matrix = json.load(f)
+            with open(meta_path, "r") as f:
+                self.meta_db = json.load(f)
 
-        # Convert classes to a Python set once for O(1) lightning-fast lookups
-        self.known_classes = set(self.le.classes_)
+            with open(encoder_path, "r") as f:
+                self.champ_encoder = json.load(f)
 
-        # Load the JSON databases
-        with open(synergy_path, "r") as f:
-            self.synergy_matrix = json.load(f)
-        with open(meta_path, "r") as f:
-            self.meta_db = json.load(f)
+            self.known_classes = set(self.champ_encoder.keys())
 
-        # Load PyTorch using safetensors
-        # We calculate num_champs dynamically from the LabelEncoder length so we don't need the unsafe .pth dict!
-        num_champs = len(self.le.classes_)
-        self.model = Model(num_champs)
-        load_model(self.model, model_path)
-        self.model.eval()
+            num_champs = len(self.known_classes)
+            self.model = Model(num_champs)
+            load_model(self.model, model_path)
+            self.model.eval()
 
-        logger.info("AI Model and Label Encoder loaded successfully.")
+            self.ai_ready = True
+            logger.info("AI Model loaded successfully.")
+
+        except Exception as e:
+            logger.error(f"Failed to load AI components: {e}")
 
     # This function takes in a draft dictionary, preprocesses it, and returns the predicted win probability for the blue team
     def predict_match(self, draft_dict: Dict[str, str]) -> Tuple[float, float, float, float]:
@@ -103,22 +106,19 @@ class LeagueAI:
 
         # Safe encoding that never crashes on 'unknown'
         encoded_list = [
-            self.le.transform([champ])[0] if champ in self.known_classes else 0
+            self.champ_encoder.get(champ, 0)
             for champ in raw_champs
         ]
-
-        processed_champs = [champ if champ in self.known_classes else 'Unknown' for champ in raw_champs]
-        self.le.transform(processed_champs)
 
         # Extract the raw champion names from the dictionary to calculate synergy.
         blue_champs = raw_champs[:5]
         red_champs = raw_champs[5:]
 
         # Calculate synergy scores for both teams using the synergy matrix
-        blue_synergy = calculate_team_synergy(blue_champs, self.synergy_matrix)
-        red_synergy = calculate_team_synergy(red_champs, self.synergy_matrix)
+        blue_synergy = calculate_team_synergy(blue_champs, self.synergy_matrix, self.config['BASE_WINRATE'])
+        red_synergy = calculate_team_synergy(red_champs, self.synergy_matrix, self.config['BASE_WINRATE'])
 
-        meta_list = [self.meta_db.get(champ, config.BASE_WINRATE) for champ in raw_champs]
+        meta_list = [self.meta_db.get(champ, self.config['BASE_WINRATE']) for champ in raw_champs]
 
         # Convert everything to tensors
         x_tensor = torch.tensor([encoded_list], dtype=torch.long)
@@ -131,8 +131,7 @@ class LeagueAI:
         return prediction, 1.0 - prediction, blue_synergy, red_synergy
 
     # This function calculates the winrates
-    @staticmethod
-    def apply_hybrid_algorithm(base_blue_prob: float, blue_winrates: List[float],
+    def apply_hybrid_algorithm(self, base_blue_prob: float, blue_winrates: List[float],
                                red_winrates: List[float], blue_masteries: List[int],
                                red_masteries: List[int]) -> Tuple[float, float]:
 
@@ -141,15 +140,14 @@ class LeagueAI:
 
         skill_modifier = ((avg_blue - avg_red) * 0.5) / 100.0
 
-        # Use the Constants here!
         def calculate_mastery_modifier(masteries: List[int]) -> float:
             team_mod = 0.0
             for points in masteries:
-                if points < config.FIRST_TIME_THRESHOLD:
-                    team_mod -= config.FIRST_TIME_PENALTY
-                elif points > config.OTP_THRESHOLD:
-                    extra_points = min(points, config.OTP_MAX_CAP) - config.OTP_THRESHOLD
-                    team_mod += (extra_points / 100000) * config.OTP_BUFF_MULTIPLIER
+                if points < self.config['FIRST_TIME_THRESHOLD']:
+                    team_mod -= self.config['FIRST_TIME_PENALTY']
+                elif points > self.config['OTP_THRESHOLD']:
+                    extra_points = min(points, self.config['OTP_MAX_CAP']) - self.config['OTP_THRESHOLD']
+                    team_mod += (extra_points / 100000) * self.config['OTP_BUFF_MULTIPLIER']
             return team_mod
 
         blue_x_factor = calculate_mastery_modifier(blue_masteries)
@@ -236,7 +234,7 @@ class LeagueAI:
             pair = sorted([champ, ally])
             pair_key = f"{pair[0]}-{pair[1]}"
             if pair_key in self.synergy_matrix:
-                syn_score = self.synergy_matrix[pair_key]["winrate"] - config.BASE_WINRATE
+                syn_score = self.synergy_matrix[pair_key]["winrate"] - self.config['BASE_WINRATE']
                 if syn_score > best_syn_score:
                     best_syn_score = syn_score
                     best_ally = ally
@@ -245,7 +243,7 @@ class LeagueAI:
             return f"High synergy with {best_ally}."
 
         # Check if it's just a raw meta monster right now
-        meta_wr = self.meta_db.get(champ, config.BASE_WINRATE)
+        meta_wr = self.meta_db.get(champ, self.config['BASE_WINRATE'])
         if meta_wr >= 0.515:
             return f"Strong current meta pick ({meta_wr * 100:.1f}% WR)."
 

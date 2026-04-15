@@ -44,7 +44,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Models
 MODEL_PATH = os.path.join(BASE_DIR, 'models', 'Lol_draft_predictor.safetensors')
-ENCODER_PATH = os.path.join(BASE_DIR, 'models', 'label_encoder.skops')
+ENCODER_PATH = os.path.join(BASE_DIR, 'models', 'champion_encoder.json')
 
 # External Factor
 SYNERGY_PATH = os.path.join(BASE_DIR, 'data', 'Synergy_Matrix.json')
