@@ -3,6 +3,8 @@ The Database Manager is responsible for all interactions with the database.
 It provides methods to log match data, manage linked accounts, and fetch statistics for the Hall of Shame.
 By centralizing database operations in this class, we can ensure consistent data handling and make it easier to maintain and update our database schema in the future.
 """
+from sqlite3 import Row
+from typing import Iterable
 
 import aiosqlite
 import logging
@@ -33,7 +35,8 @@ class DatabaseManager:
                 CREATE TABLE IF NOT EXISTS linked_accounts (
                     discord_id TEXT PRIMARY KEY,
                     puuid TEXT UNIQUE,
-                    riot_id TEXT
+                    riot_id TEXT,
+                    server TEXT
                 )
             """)
             await conn.commit()
@@ -56,13 +59,13 @@ class DatabaseManager:
             async with conn.execute("SELECT 1 FROM opt_outs WHERE discord_id = ?", (str(discord_id),)) as cursor:
                 return await cursor.fetchone() is not None
 
-    # Link the account
-    async def link_account(self, discord_id, puuid, riot_id):
+    # Link the account like connect the player to the database.
+    async def link_account(self, discord_id: int, puuid: str, riot_id: str, server: str):
         async with aiosqlite.connect(self.db_path) as conn:
             await conn.execute("""
-                INSERT OR REPLACE INTO linked_accounts (discord_id, puuid, riot_id)
-                VALUES (?, ?, ?)
-            """, (str(discord_id), puuid, riot_id))
+                INSERT OR REPLACE INTO linked_accounts (discord_id, puuid, riot_id, server)
+                VALUES (?, ?, ?, ?)
+            """, (str(discord_id), puuid, riot_id, server))
             await conn.commit()
 
     # Unlink the account
@@ -92,9 +95,9 @@ class DatabaseManager:
                 return await cursor.fetchone()
 
     # Get all linked accounts
-    async def get_all_linked_accounts(self):
+    async def get_all_linked_accounts(self) -> Iterable[Row]:
         async with aiosqlite.connect(self.db_path) as conn:
-            async with conn.execute("SELECT discord_id, puuid, riot_id FROM linked_accounts") as cursor:
+            async with conn.execute("SELECT discord_id, puuid, riot_id, server FROM linked_accounts") as cursor:
                 return await cursor.fetchall()
 
     # Fetches the worst stats from the players
@@ -165,7 +168,7 @@ class DatabaseManager:
             return {
                 "backpack": backpack,
                 "jester": jester,
-                "tax": tax, 
+                "tax": tax,
                 "pacifist": pacifist,
                 "inter": inter,
                 "addict": addict,

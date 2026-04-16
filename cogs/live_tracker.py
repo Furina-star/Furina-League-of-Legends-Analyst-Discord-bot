@@ -70,10 +70,10 @@ class LiveTracker(commands.Cog):
 
         current_live_matches = set()
 
-        for discord_id, puuid, riot_id in accounts:
+        for discord_id, puuid, riot_id, server in accounts:
             try:
-                # Ping the Riot Spectator API
-                match_data = await self.bot.riot_client.get_live_match(puuid)
+                # Ping the Riot Spectator API using the specific player's server
+                match_data = await self.bot.riot_client.get_live_match(puuid, platform_override=server)
 
                 # Skip if not in game or API rate limit error
                 if not isinstance(match_data, dict) or 'gameId' not in match_data:

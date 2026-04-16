@@ -134,7 +134,7 @@ class GeneralCommands(commands.Cog):
                 return await interaction.followup.send(msg)
 
             # Database execution
-            await self.bot.db.link_account(interaction.user.id, puuid, new_riot_id)
+            await self.bot.db.link_account(interaction.user.id, puuid, new_riot_id, server)
             await interaction.followup.send(msg)
 
 
