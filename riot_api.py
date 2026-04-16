@@ -113,9 +113,13 @@ class RiotAPIClient:
     # Initiate getting the PUUID of the player as a function
     async def get_puuid(self, game_name: str, tag_line: str, server_context: Optional[str] = None) -> Optional[str]:
         r = self._resolve_region(server_context) if server_context else self.region
+        if r == "sea":
+            r = "asia"
+
         encoded_name = quote(game_name)
         url = f"https://{r}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{encoded_name}/{tag_line}"
         data = await self._fetch(url, cache_ttl=86400)
+
         if isinstance(data, dict):
             return data.get('puuid')
         return None
