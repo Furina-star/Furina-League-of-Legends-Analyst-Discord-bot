@@ -31,6 +31,7 @@ class DiscordBot(commands.Bot):
         # We set intents and turn off the default help menu here
         intents = discord.Intents.default()
         intents.message_content = False
+        intents.members = True
         super().__init__(command_prefix="!", intents=intents)
 
     # This is a special function that runs once when the bot starts up, before it connects to Discord.
@@ -163,7 +164,7 @@ if __name__ == "__main__":
         logger.info(f"Logged in as {bot.user.name}")
 
         # Give a status for the bot just a nice touch
-        await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="Hardstuck Iron"))
+        await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="the Rift"))
 
         logger.info("Furina is Online and Ready!")
 

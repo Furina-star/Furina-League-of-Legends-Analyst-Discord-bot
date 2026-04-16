@@ -4,6 +4,8 @@ It takes in the relevant data and constructs a Discord Embed object with the app
 """
 
 import discord
+from discord import Embed
+
 from modules.utils.parsers import ParsedStats
 from modules.persona.tags import get_pregame_tags, get_performance_tags, get_draft_warnings
 from modules.persona.verdicts import generate_furina_verdict
@@ -248,5 +250,84 @@ def build_draft_embed(role: str, user_team: str, error_msg: str | None, top_pick
                 embed.add_field(name=f"#{rank} - {champ}", value=f"Predicted WR: **{prob * 100:.1f}%**", inline=False)
 
     embed.set_image(url="attachment://draft_board.png")
+
+    return embed
+
+def build_hall_of_shame_embed(stats: dict, guild: discord.Guild) -> tuple[Embed, None] | Embed:
+    embed = discord.Embed(
+        title="🏛️ The Hall of Shame",
+        description="The Oratrice has compiled the server's most tragic performances.",
+        color=0x8A0303  # Deep Executioner Red
+    )
+
+    has_data = False
+    primary_target_id = None
+
+    if stats.get("backpack"):
+        has_data = True
+        primary_target_id = int(stats['backpack'][0])
+        embed.add_field(
+            name="💀 The Heavy Backpack (Lowest KP%)",
+            value=f"<@{stats['backpack'][0]}> averaged an abysmal **{stats['backpack'][1] * 100:.1f}%** Kill Participation.",
+            inline=False
+        )
+
+    if stats.get("jester"):
+        has_data = True
+        embed.add_field(
+            name="🤡 The Court Jester (Most Deaths)",
+            value=f"<@{stats['jester'][0]}> managed to die **{stats['jester'][1]}** times in a single match.",
+            inline=False
+        )
+
+    if stats.get("tax"):
+        has_data = True
+        embed.add_field(
+            name="💰 The Tax Collector (Highest GPM)",
+            value=f"<@{stats['tax'][0]}> hoarded **{stats['tax'][1]:.0f}** Gold Per Minute, actively doing nothing with it.",
+            inline=False
+        )
+
+    if stats.get("pacifist"):
+        has_data = True
+        embed.add_field(
+            name="🕊️ The Pacifist (Lowest DPM)",
+            value=f"<@{stats['pacifist'][0]}> dealt a pathetic **{stats['pacifist'][1]:.0f}** Damage Per Minute. Basically a walking ward.",
+            inline=False
+        )
+
+    if stats.get("inter"):
+        has_data = True
+        embed.add_field(
+            name="📉 The Iron Resident (Lowest Winrate)",
+            value=f"<@{stats['inter'][0]}> is dragging teams down with a catastrophic **{stats['inter'][1]:.1f}%** win rate.",
+            inline=False
+        )
+
+    if stats.get("addict"):
+        has_data = True
+        embed.add_field(
+            name="🌱 The Touch Grass Award (Most Games)",
+            value=f"<@{stats['addict'][0]}> has played **{stats['addict'][1]}** matches. Please, go outside.",
+            inline=False
+        )
+
+    if stats.get("starving"):
+        has_data = True
+        embed.add_field(
+            name="🥣 The Starving Artist (Lowest GPM)",
+            value=f"<@{stats['starving'][0]}> survived on a miserable **{stats['starving'][1]:.0f}** Gold Per Minute.",
+            inline=False
+        )
+
+    if not has_data:
+        embed.description = "The stage is currently empty. Play more games this week to populate the Hall of Shame."
+        return embed, None
+
+    # Extract and Set the Target Avatar Thumbnail
+    if primary_target_id:
+        worst_member = guild.get_member(primary_target_id)
+        if worst_member and worst_member.display_avatar:
+            embed.set_thumbnail(url=worst_member.display_avatar.url)
 
     return embed

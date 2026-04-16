@@ -97,28 +97,77 @@ class DatabaseManager:
             async with conn.execute("SELECT discord_id, puuid, riot_id FROM linked_accounts") as cursor:
                 return await cursor.fetchall()
 
-    # Fetches the worst stats from the past 7 days
-    async def get_hall_of_shame(self):
+    # Fetches the worst stats from the players
+    async def get_hall_of_shame(self, server_member_ids: list):
+        if not server_member_ids:
+            return {}
+
+        # Creates a dynamic string of question marks like "?, ?, ?" based on server size
+        placeholders = ', '.join('?' for _ in server_member_ids)
+
         async with aiosqlite.connect(self.db_path) as conn:
-            async with conn.execute("""
+            # Backpack
+            async with conn.execute(f"""
                 SELECT discord_id, AVG(kp_percent) as val FROM game_logs 
-                WHERE discord_id IS NOT NULL AND discord_id != 'None'
+                WHERE discord_id IN ({placeholders})
                 GROUP BY discord_id ORDER BY val ASC LIMIT 1
-            """) as cursor:
+            """, server_member_ids) as cursor:
                 backpack = await cursor.fetchone()
 
-            async with conn.execute("""
+            #Jester
+            async with conn.execute(f"""
                 SELECT discord_id, deaths as val FROM game_logs 
-                WHERE discord_id IS NOT NULL AND discord_id != 'None'
+                WHERE discord_id IN ({placeholders})
                 ORDER BY val DESC LIMIT 1
-            """) as cursor:
+            """, server_member_ids) as cursor:
                 jester = await cursor.fetchone()
 
-            async with conn.execute("""
+            # Tax Collector
+            async with conn.execute(f"""
                 SELECT discord_id, AVG(gold_per_min) as val FROM game_logs 
-                WHERE discord_id IS NOT NULL AND discord_id != 'None'
+                WHERE discord_id IN ({placeholders})
                 GROUP BY discord_id ORDER BY val DESC LIMIT 1
-            """) as cursor:
+            """, server_member_ids) as cursor:
                 tax = await cursor.fetchone()
 
-            return {"backpack": backpack, "jester": jester, "tax": tax}
+            # Pacifist
+            async with conn.execute(f"""
+                SELECT discord_id, AVG(dpm) as val FROM game_logs 
+                WHERE discord_id IN ({placeholders})
+                GROUP BY discord_id ORDER BY val ASC LIMIT 1
+            """, server_member_ids) as cursor:
+                pacifist = await cursor.fetchone()
+
+            # Inter
+            async with conn.execute(f"""
+                SELECT discord_id, AVG(win) * 100 as val FROM game_logs 
+                WHERE discord_id IN ({placeholders})
+                GROUP BY discord_id ORDER BY val ASC LIMIT 1
+            """, server_member_ids) as cursor:
+                inter = await cursor.fetchone()
+
+            # Addict
+            async with conn.execute(f"""
+                SELECT discord_id, COUNT(match_id) as val FROM game_logs 
+                WHERE discord_id IN ({placeholders})
+                GROUP BY discord_id ORDER BY val DESC LIMIT 1
+            """, server_member_ids) as cursor:
+                addict = await cursor.fetchone()
+
+            # Starving
+            async with conn.execute(f"""
+                SELECT discord_id, AVG(gold_per_min) as val FROM game_logs 
+                WHERE discord_id IN ({placeholders})
+                GROUP BY discord_id ORDER BY val ASC LIMIT 1
+            """, server_member_ids) as cursor:
+                starving = await cursor.fetchone()
+
+            return {
+                "backpack": backpack,
+                "jester": jester,
+                "tax": tax, 
+                "pacifist": pacifist,
+                "inter": inter,
+                "addict": addict,
+                "starving": starving
+            }
