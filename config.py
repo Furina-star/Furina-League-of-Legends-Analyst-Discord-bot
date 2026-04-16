@@ -10,10 +10,15 @@ DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 SENTRY_DSN = os.getenv("SENTRY_DSN")
 
 # The Server Dictionary for RIOT API
-SERVER_TO_REGION = {
-    "na1": "americas", "br1": "americas", "lan1": "americas", "las1": "americas", "oc1": "americas",
-    "euw1": "europe", "eun1": "europe", "tr1": "europe", "ru": "europe",
-    "kr": "asia", "jp1": "asia", "sg2": "asia", "tw2": "asia", "vn2": "asia", "th2": "asia", "ph2": "asia"
+PLATFORM_ROUTING = {
+    # Americas
+    "na1": "americas", "br1": "americas", "la1": "americas", "la2": "americas",
+    # Asia
+    "kr": "asia", "jp1": "asia",
+    # Europe
+    "eun1": "europe", "euw1": "europe", "tr1": "europe", "ru": "europe", "me1": "europe",
+    # SEA
+    "oc1": "sea", "ph2": "sea", "sg2": "sea", "th2": "sea", "tw2": "sea", "vn2": "sea"
 }
 
 # Riot API Queue ID Mapping

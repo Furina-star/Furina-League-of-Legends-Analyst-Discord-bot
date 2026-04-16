@@ -38,8 +38,6 @@ class StatsCommands(commands.Cog):
                 f"⚠️ Invalid server! Valid servers are: {', '.join(self.server_dict.keys())}", ephemeral=True)
             return
 
-        region = self.server_dict[server]
-
         # This call out the Riot ID parser
         game_name, tag_line = parse_riot_id(full_riot_id)
         if not game_name or not tag_line:
@@ -50,14 +48,14 @@ class StatsCommands(commands.Cog):
         await interaction.response.defer(thinking=True)
 
         # Get the puuid
-        puuid = await self.riot.get_puuid(game_name, tag_line, region_override=region)
+        puuid = await self.riot.get_puuid(game_name, tag_line, server_context=server)
         if not puuid:
             await interaction.followup.send(
                 "⚠️ Could not find player. Check spelling!",allowed_mentions=discord.AllowedMentions.none())
             return
 
         # Get the most recent match ID
-        history = await self.riot.get_match_history(puuid, count=10, region_override=region, server_context=server)
+        history = await self.riot.get_match_history(puuid, count=10, server_context=server)
         if history is None:
             await interaction.followup.send("⚠️ Riot API failed to respond. Servers might be down!")
             return
@@ -65,7 +63,7 @@ class StatsCommands(commands.Cog):
             await interaction.followup.send("⚠️ This player has no recent ranked games.")
             return
 
-        match_data = await self.riot.get_match_details(history[0], region_override=region, server_context=server)
+        match_data = await self.riot.get_match_details(history[0], server_context=server)
         if not match_data:
             await interaction.followup.send("⚠️ Could not fetch match details. Riot's servers might be unreachable.")
             return
@@ -104,7 +102,7 @@ class StatsCommands(commands.Cog):
 
         # Build the embed and send the Roast/Praise embed
         embed = build_lastgame_embed(server, full_riot_id, player_stats, self.bot.patch_version)
-        view = MatchCycleView(self.riot, puuid, server, region, history, 0, self.bot.patch_version, full_riot_id)
+        view = MatchCycleView(self.riot, puuid, server, history, 0, self.bot.patch_version, full_riot_id)
         await interaction.followup.send(embed=embed, view=view)
 
 async def setup(bot):

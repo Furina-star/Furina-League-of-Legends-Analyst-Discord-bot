@@ -47,8 +47,6 @@ class DraftCommands(commands.Cog):
             await interaction.response.send_message(f"⚠️ Invalid server! Valid servers are: {', '.join(self.server_dict.keys())}", ephemeral=True)
             return
 
-        region = self.server_dict[server]
-
         # This call out the Riot ID parser
         game_name, tag_line = parse_riot_id(full_riot_id)
         if not game_name or not tag_line:
@@ -59,7 +57,7 @@ class DraftCommands(commands.Cog):
         await interaction.response.defer(thinking=True)
 
         # Get PUUID
-        puuid = await self.riot.get_puuid(game_name, tag_line, region_override=region)
+        puuid = await self.riot.get_puuid(game_name, tag_line, server_context=server)
         if not puuid:
             await interaction.followup.send(f"⚠️ Could not find player {game_name}#{tag_line}.", allowed_mentions=discord.AllowedMentions.none())
             return
@@ -149,8 +147,6 @@ class DraftCommands(commands.Cog):
             await interaction.response.send_message(f"⚠️ Invalid server! Valid servers are: {', '.join(self.server_dict.keys())}", ephemeral=True)
             return
 
-        region = self.server_dict[server]
-
         # This call out the Riot ID parser
         game_name, tag_line = parse_riot_id(full_riot_id)
         if not game_name or not tag_line:
@@ -163,7 +159,7 @@ class DraftCommands(commands.Cog):
 
         safe_name = escape_mentions(game_name)
         # This call out get_riot_puuid function from RiotAPIClient Class in riot_api.py.
-        puuid = await self.riot.get_puuid(game_name, tag_line, region_override=region)
+        puuid = await self.riot.get_puuid(game_name, tag_line, server_context=server)
         if not puuid:
             await interaction.followup.send(f"⚠️ Could not find player {game_name}#{tag_line}.", allowed_mentions=discord.AllowedMentions.none())
             return
@@ -183,8 +179,9 @@ class DraftCommands(commands.Cog):
         # Building the Discord Embed
         enemy_team_id = 200 if user_team == 100 else 100
         bot_entries, player_results = await self.riot.fetch_enemy_data(
-            match_data, enemy_team_id, server, region, self.champ_dict, self.keystone_db, self.role_db
+            match_data, enemy_team_id, server, self.champ_dict, self.keystone_db, self.role_db
         )
+
         embed = build_scout_embed(server, safe_name, bot_entries, player_results, self.ai.meta_db)
 
         await interaction.followup.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())

@@ -111,13 +111,12 @@ class GeneralCommands(commands.Cog):
         if server not in stats_cog.server_dict:
             return await interaction.followup.send("⚠️ Invalid server region.")
 
-        region = stats_cog.server_dict[server]
         game_name, tag_line = full_riot_id.split("#", 1)
         new_riot_id = f"{game_name}#{tag_line}"
 
         try:
             # API Validation
-            puuid = await stats_cog.riot.get_puuid(game_name, tag_line, region_override=region)
+            puuid = await stats_cog.riot.get_puuid(game_name, tag_line, server_context=server)
             if not puuid:
                 return await interaction.followup.send(
                     "⚠️ Could not find that Riot ID. Ensure the spelling and region are correct.")

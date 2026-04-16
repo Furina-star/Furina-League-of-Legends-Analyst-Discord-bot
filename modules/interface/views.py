@@ -9,12 +9,11 @@ from modules.interface.canvas_engine import render_draft_board
 
 # This class handles the button for '/postgame'
 class MatchCycleView(discord.ui.View):
-    def __init__(self, riot_client, puuid, server, region, history, current_index, bot_version, full_riot_id):
+    def __init__(self, riot_client, puuid, server, history, current_index, bot_version, full_riot_id):
         super().__init__(timeout=300) # = to 5 minutes of view time
         self.riot = riot_client
         self.puuid = puuid
         self.server = server
-        self.region = region
         self.history = history
         self.index = current_index
         self.bot_version = bot_version
@@ -25,7 +24,7 @@ class MatchCycleView(discord.ui.View):
 
         # Fetch the new match details based on the current index
         match_id = self.history[self.index]
-        match_data = await self.riot.get_match_details(match_id, region_override=self.region, server_context=self.server)
+        match_data = await self.riot.get_match_details(match_id, server_context=self.server)
 
         if not match_data:
             await interaction.followup.send("⚠️ Could not fetch details for this match.", ephemeral=True)

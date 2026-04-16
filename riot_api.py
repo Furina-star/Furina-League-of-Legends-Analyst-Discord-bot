@@ -9,6 +9,7 @@ import random
 import logging
 from typing import Optional, Any
 from urllib.parse import quote
+from config import PLATFORM_ROUTING
 from modules.utils.cache import RiotCache
 from modules.utils.parsers import parse_winrate, find_duos, detect_autofill, sort_team_roles
 
@@ -33,13 +34,11 @@ class RiotAPIClient:
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession()
         return self._session
-
-    # List of servers that require 'sea' routing for matches
-    SEA_SERVERS = {"oc1", "ph2", "sg2", "th2", "tw2", "vn2"}
     # Riot uses 'sea' routing for match history on SEA servers.
     @staticmethod
-    def _resolve_region(server: str, region: str) -> str:
-        return "sea" if server.lower() in RiotAPIClient.SEA_SERVERS else region
+    def _resolve_region(server: str) -> str:
+        # Look up the server, fallback to americas if somehow missing
+        return PLATFORM_ROUTING.get(server.lower(), "americas")
 
     # Close the session when the bot shuts down
     async def close(self):
@@ -112,8 +111,8 @@ class RiotAPIClient:
         return None
 
     # Initiate getting the PUUID of the player as a function
-    async def get_puuid(self, game_name: str, tag_line: str, region_override: Optional[str] = None) -> Optional[str]:
-        r = region_override or self.region
+    async def get_puuid(self, game_name: str, tag_line: str, server_context: Optional[str] = None) -> Optional[str]:
+        r = self._resolve_region(server_context) if server_context else self.region
         encoded_name = quote(game_name)
         url = f"https://{r}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{encoded_name}/{tag_line}"
         data = await self._fetch(url, cache_ttl=86400)
@@ -140,20 +139,16 @@ class RiotAPIClient:
         return 0
 
     # Initiate Match History API as a function
-    async def get_match_history(self, puuid, count=5, queue_id=None, region_override=None, server_context=None):
-        r = region_override or self.region
-        if server_context:
-            r = self._resolve_region(server_context, r)
+    async def get_match_history(self, puuid, count=5, queue_id=None, server_context=None):
+        r = self._resolve_region(server_context) if server_context else self.region
         url = f"https://{r}.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?start=0&count={count}"
         if queue_id is not None:
             url += f"&queue={queue_id}"
         return await self._fetch(url, cache_ttl=300)
 
     # Initiate Match Details API as a function
-    async def get_match_details(self, match_id, region_override=None, server_context=None):
-        r = region_override or self.region
-        if server_context:
-            r = self._resolve_region(server_context, r)
+    async def get_match_details(self, match_id, server_context=None):
+        r = self._resolve_region(server_context) if server_context else self.region
         url = f"https://{r}.api.riotgames.com/lol/match/v5/matches/{match_id}"
         return await self._fetch(url, cache_ttl=86400)
 
@@ -231,7 +226,7 @@ class RiotAPIClient:
         return winrates, masteries, avg_wr
 
     # Helper number one for fetching enemy data
-    async def _fetch_single_enemy(self, c_name, riot_id, e_puuid, c_id, server, region, perks, inferred_position, keystone_db):
+    async def _fetch_single_enemy(self, c_name, riot_id, e_puuid, c_id, server, perks, inferred_position, keystone_db):
         # Check if Keystone was used
         if perks and 'perkIds' in perks and len(perks['perkIds']) > 0:
             keystone_id = str(perks['perkIds'][0])
@@ -241,7 +236,7 @@ class RiotAPIClient:
 
         # Fetch their last 5 ranked matches (costs 1 API call per player)
         mastery_task = self.get_champion_mastery(e_puuid, c_id, platform_override=server)
-        history_task = self.get_match_history(e_puuid, count=5, queue_id=420, region_override=region)
+        history_task = self.get_match_history(e_puuid, count=5, queue_id=420, server_context=server)
 
         # Fetch their top mastery champion
         top_mastery_task = self.get_top_masteries(e_puuid, count=3, platform_override=server)
@@ -254,7 +249,7 @@ class RiotAPIClient:
         )
 
         # Reuse already-fetched history IDs, get_match_details is cached 24h so repeat calls are free
-        primary_role = await self.get_primary_role_from_history(history or [], e_puuid, region)
+        primary_role = await self.get_primary_role_from_history(history or [], e_puuid, server)
         is_autofilled = detect_autofill(primary_role, inferred_position)
 
         is_otp = False
@@ -271,7 +266,7 @@ class RiotAPIClient:
         return c_name, riot_id, rank, mastery, history, keystone_name, is_otp, is_autofilled
 
     # Initiate fetching enemy data as a function, this is where we get the mastery, rank, and match history for each enemy player, and also check if any of them are duos.
-    async def fetch_enemy_data(self, match_data, enemy_team_id, server, region, champ_dict, keystone_db, role_db):
+    async def fetch_enemy_data(self, match_data, enemy_team_id, server, champ_dict, keystone_db, role_db):
         bot_entries = []
         player_tasks = []
 
@@ -293,11 +288,12 @@ class RiotAPIClient:
                 bot_entries.append(c_name)
             else:
                 riot_id = p.get('riotId') or p.get('summonerName') or 'Unknown Player'
-                inferred_position = champ_to_position.get(c_name, '')  # ← inferred from sort
+                inferred_position = champ_to_position.get(c_name, '')
+
                 player_tasks.append(
                     self._fetch_single_enemy(
                         c_name, riot_id, e_puuid, p['championId'],
-                        server, region, p.get('perks', {}), inferred_position,
+                        server, p.get('perks', {}), inferred_position,
                         keystone_db
                     )
                 )
@@ -318,12 +314,12 @@ class RiotAPIClient:
         return bot_entries, final_players
 
     # Initiate the primary role detection as a function.
-    async def get_primary_role_from_history(self, match_ids: list, puuid: str, region: str) -> str:
+    async def get_primary_role_from_history(self, match_ids: list, puuid: str, server_context: str) -> str:
         if not match_ids:
             return ""
 
-        # Fetch all match details concurrently — 24h cache means repeat calls are FREE
-        detail_tasks = [self.get_match_details(mid, region_override=region) for mid in match_ids]
+        # Pass server_context directly
+        detail_tasks = [self.get_match_details(mid, server_context=server_context) for mid in match_ids]
         details = await asyncio.gather(*detail_tasks)
 
         role_counts = {}

@@ -49,7 +49,7 @@ class DiscordBot(commands.Bot):
         self.meta_db = META_DB
         self.role_db = ROLE_DB
         self.keystone_db = RUNE_DB
-        self.server_dict = config.SERVER_TO_REGION
+        self.server_dict = config.PLATFORM_ROUTING
 
         # Initialize APIs
         self.riot_client = RiotAPIClient(config.RIOT_KEY)
