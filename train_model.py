@@ -17,6 +17,7 @@ import json
 import os
 import logging
 import config
+import sqlite3
 from ai_wrapper import calculate_team_synergy
 
 # Get the logging system
@@ -58,7 +59,31 @@ class Model(nn.Module):
 # Load your CUSTOM Mined Data
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 os.chdir(BASE_DIR)
-df = pd.read_csv("data/upgraded_drafts.csv")
+logger.info("Loading MVP Dataset...")
+df_csv = pd.read_csv("data/upgraded_drafts.csv")
+
+# Extract passively mined data from the SQLite Database
+logger.info("Extracting Live Mined Data from Database...")
+db_data = []
+with sqlite3.connect("data/server_state.db") as conn:
+    cursor = conn.cursor()
+    # Fetch all passively mined matches
+    cursor.execute("SELECT match_id, blue_win, payload FROM ml_training_data")
+    rows = cursor.fetchall()
+
+    for match_id, blue_win, payload_str in rows:
+        payload = json.loads(payload_str)
+        payload['matchId'] = match_id
+        payload['blueWin'] = blue_win
+        db_data.append(payload)
+
+# Merge them together in memory
+if db_data:
+    df_db = pd.DataFrame(db_data)
+    df = pd.concat([df_csv, df_db], ignore_index=True)
+    logger.info(f"Merged {len(df_csv)} CSV matches with {len(df_db)} Database matches (Total: {len(df)}).")
+else:
+    df = df_csv
 
 # Load the Synergy Matrix
 logger.info("Loading Synergy Matrix...")

@@ -1,6 +1,6 @@
 """
 This file build the Synergy_Matrix.json file.
-It reads the ranked_drafts.csv file, calculates the global win rates for each champion pair, and saves it as a JSON file.
+It reads the [OLD]ranked_drafts.csv file, calculates the global win rates for each champion pair, and saves it as a JSON file.
  This is used in the postgame review to show how well the champion duo performed in the current meta.
 """
 
@@ -12,7 +12,7 @@ from itertools import combinations
 
 SCRIPT_DIR = str(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = str(os.path.dirname(SCRIPT_DIR))
-CSV_PATH = str(os.path.join(DATA_DIR, "ranked_drafts.csv"))
+CSV_PATH = str(os.path.join(DATA_DIR, "[OLD]ranked_drafts.csv"))
 JSON_PATH = str(os.path.join(DATA_DIR, "Synergy_Matrix.json"))
 
 def build_synergy_matrix():

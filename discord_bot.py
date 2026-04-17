@@ -68,7 +68,15 @@ class DiscordBot(commands.Bot):
         }
 
         # Initialize AI
-        self.ai_system = LeagueAI(bot_config=bot_config_dict)
+        try:
+            self.ai_system = LeagueAI(
+                bot_config=bot_config_dict,
+                synergy_matrix=self.synergy_matrix,
+                meta_db=self.meta_db
+            )
+            logger.info("Deep Learning Model loaded perfectly.")
+        except Exception as e:
+            logger.error(f"Failed to load ML Model: {e}")
 
         # Load Cogs (Make sure to load your new general_commands cog where /help is!)
         try:

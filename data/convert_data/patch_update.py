@@ -28,7 +28,7 @@ def run_script(script_name):
 
 
 def prune_database():
-    csv_path = str(os.path.join(DATA_DIR, "ranked_drafts.csv"))
+    csv_path = str(os.path.join(DATA_DIR, "[OLD]ranked_drafts.csv"))
     print(f"\n Loading matches from {csv_path}...")
 
     if not os.path.exists(csv_path):

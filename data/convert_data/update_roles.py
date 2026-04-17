@@ -8,7 +8,7 @@ import os
 
 SCRIPT_DIR = str(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = str(os.path.dirname(SCRIPT_DIR))
-DEFAULT_CSV = str(os.path.join(DATA_DIR, "ranked_drafts.csv"))
+DEFAULT_CSV = str(os.path.join(DATA_DIR, "[OLD]ranked_drafts.csv"))
 DEFAULT_JSON = str(os.path.join(DATA_DIR, "Champion_Roles.json"))
 
 def generate_dynamic_roles(csv_path=DEFAULT_CSV, output_path=DEFAULT_JSON):

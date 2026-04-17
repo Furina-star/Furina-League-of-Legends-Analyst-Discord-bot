@@ -60,40 +60,33 @@ def calculate_team_synergy(team_champs: List[str], synergy_matrix: Dict[str, Any
 
 # Wrapper Class
 class LeagueAI:
-    # This function set up and load Label encoder and the model
-    def __init__(self,
-                 bot_config: dict,
+    def __init__(self, bot_config: dict, synergy_matrix: dict, meta_db: dict,
                  model_path: str = "models/Lol_draft_predictor.safetensors",
                  encoder_path: str = "models/champion_encoder.json",
-                 synergy_path: str = "data/Synergy_Matrix.json",
-                 meta_path: str = "data/Meta_Champions.json"):
+                 scaler_path: str = "models/scaler.pkl"):
 
-        logger.info("Loading AI parameters...")
-        self.scaler = joblib.load("models/scaler.pkl")
         self.config = bot_config
         self.ai_ready = False
 
         try:
-            with open(synergy_path, "r") as f:
-                self.synergy_matrix = json.load(f)
-            with open(meta_path, "r") as f:
-                self.meta_db = json.load(f)
+            self.synergy_matrix = synergy_matrix
+            self.meta_db = meta_db
 
             with open(encoder_path, "r") as f:
-                self.champ_encoder = json.load(f)
+                self.champion_mapping = json.load(f)
+            self.known_classes = list(self.champion_mapping.keys())
 
-            self.known_classes = set(self.champ_encoder.keys())
+            self.scaler = joblib.load(scaler_path)
 
             num_champs = len(self.known_classes)
-            self.model = Model(num_champions=num_champs, embedding_dim=self.config.get('EMBEDDING_DIM', 16), dropout_rate=self.config.get('DROPOUT_RATE', 0.25))
+            self.model = Model(num_champions=num_champs, embedding_dim=self.config.get('EMBEDDING_DIM', 16),
+                               dropout_rate=self.config.get('DROPOUT_RATE', 0.25))
             load_model(self.model, model_path)
             self.model.eval()
-
             self.ai_ready = True
-            logger.info("AI Model loaded successfully.")
 
         except Exception as e:
-            logger.error(f"Failed to load AI components: {e}")
+            logger.error(f"Failed to load AI Model or Encoders: {e}")
 
     # This function takes in a draft dictionary, preprocesses it, and returns the predicted win probability for the blue team
     def predict_match(self, draft_dict: Dict[str, str]) -> Tuple[float, float, float, float]:
@@ -183,7 +176,7 @@ class LeagueAI:
             predictions = [predictions]
 
         return [(p, 1.0 - p) for p in predictions]
-    
+
     # Sorts a list of champion names into standard [Top, Jgl, Mid, ADC, Sup] order
     @staticmethod
     def sort_draft_strings(draft_list: list, role_db: dict) -> list:
