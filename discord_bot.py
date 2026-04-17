@@ -15,8 +15,8 @@ import os
 import sys
 import traceback
 import config
-from riot_api import RiotAPIClient
-from ai_wrapper import LeagueAI
+from services.riot_api import RiotAPIClient
+from services.ai_wrapper import LeagueAI
 from modules.utils.translator import DiscordTranslator
 from modules.utils.logger_algorithm import initialize_logger
 from modules.utils.data_loader import load_champion_mapping, META_DB, ROLE_DB, RUNE_DB, SYNERGY_MATRIX
@@ -28,11 +28,22 @@ logger = initialize_logger()
 # Creating a subclass of commands.Bot
 class DiscordBot(commands.Bot):
     def __init__(self):
-        # We set intents and turn off the default help menu here
         intents = discord.Intents.default()
         intents.message_content = False
         intents.members = True
         super().__init__(command_prefix="!", intents=intents)
+
+        # Pre declare all instance variables
+        self.db = None
+        self.patch_version = None
+        self.champ_dict = {}
+        self.meta_db = {}
+        self.role_db = {}
+        self.keystone_db = {}
+        self.synergy_matrix = {}
+        self.server_dict = {}
+        self.riot_client = None
+        self.ai_system = None
 
     # This is a special function that runs once when the bot starts up, before it connects to Discord.
     async def setup_hook(self):
@@ -122,11 +133,11 @@ class DiscordBot(commands.Bot):
         # Handles cooldowns
         if isinstance(error, app_commands.CommandOnCooldown):
             cooldown_msg = f"**Slow down!** You can use this command again in `{error.retry_after:.1f}` seconds."
-            if not interaction.response.is_done():  
+            if not interaction.response.is_done():
                 await interaction.response.send_message(cooldown_msg, ephemeral=True)
             else:
                 await interaction.followup.send(cooldown_msg, ephemeral=True)
-            return  # Stop here! Don't print a scary red error for a simple cooldown.
+            return 
 
         # Handle actual crashes and bugs
         original_error = getattr(error, 'original', error)
@@ -149,11 +160,11 @@ class DiscordBot(commands.Bot):
 
     # Safely close API Connection and the database
     async def close(self):
-        if hasattr(self, 'riot_client'):
+        if hasattr(self, 'riot_client') and self.riot_client:
             await self.riot_client.close()
             logger.info("Riot API connection closed safely.")
 
-        if hasattr(self, 'db'):
+        if hasattr(self, 'db') and self.db:
             await self.db.close()
 
         await super().close()

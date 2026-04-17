@@ -3,7 +3,7 @@ This module provides a canvas engine for creating and manipulating images using 
 It allows you to create a canvas, draw shapes, add text, and save the resulting image.
 The engine is designed to be used in an asynchronous context, making it suitable for applications that require non-blocking operations.
 """
-
+import logging
 import os
 import io
 import asyncio
@@ -11,9 +11,15 @@ import aiohttp
 import aiofiles
 from PIL import Image, ImageDraw, ImageFont
 
+# Dynamically lock the absolute path regardless of execution point
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Go up two levels from 'modules/interface' to reach the main bot root
+ROOT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
+
 # Configuration & Constants
-CACHE_DIR = "data/img_cache"
-ASSETS_DIR = "data/assets"
+ASSETS_DIR = os.path.join(ROOT_DIR, "data", "assets")
+CACHE_DIR = os.path.join(ASSETS_DIR, "img_cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 # Strict Color Palette
@@ -46,7 +52,7 @@ def _get_font(size: int) -> ImageFont.FreeTypeFont:
     cache_key = f"font_{size}"
     if cache_key not in _ASSET_CACHE:
         try:
-            _ASSET_CACHE[cache_key] = ImageFont.truetype(f"{ASSETS_DIR}/BeaufortForLOL-Bold.ttf", size)
+            _ASSET_CACHE[cache_key] = ImageFont.truetype(f"{ASSETS_DIR}/fonts/BeaufortForLOL-Bold.ttf", size)
         except OSError:
             try:
                 _ASSET_CACHE[cache_key] = ImageFont.truetype("arial.ttf", size)
@@ -58,20 +64,23 @@ def _get_font(size: int) -> ImageFont.FreeTypeFont:
 def _get_background(bg_filename: str = "background.jpg") -> Image.Image:
     cache_key = f"bg_{bg_filename}"
     if cache_key not in _ASSET_CACHE:
-        bg_path = f"{ASSETS_DIR}/{bg_filename}"
+        bg_path = os.path.join(ASSETS_DIR, "background", bg_filename)
+
         if os.path.exists(bg_path):
             background = Image.open(bg_path).convert("RGBA").resize((800, 660))
             overlay = Image.new("RGBA", (800, 660), (0, 0, 0, 40))
             _ASSET_CACHE[cache_key] = Image.alpha_composite(background, overlay)
         else:
+            logging.warning(f"⚠️ CRITICAL: Could not find background at {bg_path}")
             _ASSET_CACHE[cache_key] = Image.new("RGBA", (800, 660), BG_COLOR)
+
     return _ASSET_CACHE[cache_key].copy()
 
 # Helper to cache the gold selection border.
 def _get_select_icon() -> Image.Image | None:
     if "select_icon" not in _ASSET_CACHE:
         try:
-            _ASSET_CACHE["select_icon"] = Image.open(f"{ASSETS_DIR}/champion_series_icon.png").convert("RGBA").resize(
+            _ASSET_CACHE["select_icon"] = Image.open(f"{ASSETS_DIR}/icon/champion_series_icon.png").convert("RGBA").resize(
                 (80, 80))
         except OSError:
             _ASSET_CACHE["select_icon"] = None

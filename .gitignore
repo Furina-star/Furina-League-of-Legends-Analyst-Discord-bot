@@ -28,9 +28,9 @@ Thumbs.db
 *.sqlite3
 *.db
 riot_cache.db
-data/riot_cache.db
+data/live/riot_cache.db
 server_state.db
-data/server_state.db
+data/live/server_state.db
 server_state.db-shm
 server_state.db-wal
 data/server_state.db-shm

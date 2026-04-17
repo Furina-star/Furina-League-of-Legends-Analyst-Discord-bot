@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
-from riot_api import RiotAPIClient
+from services.riot_api import RiotAPIClient
 
 
 @pytest.fixture

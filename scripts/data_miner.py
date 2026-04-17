@@ -1,9 +1,10 @@
 """
 data_miner.py
-Spider Web Miner designed specifically for the 32-Feature ML Model.
-Outputs directly to upgraded_drafts.csv.
+Hardened Spider Web Miner designed specifically for the 32-Feature ML Model.
+Outputs directly to upgraded_drafts.csv with multi-day stability protocols.
 """
 import asyncio
+import aiohttp
 import csv
 import os
 import sys
@@ -11,7 +12,7 @@ import aiofiles
 import pandas as pd
 from collections import deque
 from dotenv import load_dotenv
-from riot_api import RiotAPIClient
+from services.riot_api import RiotAPIClient
 
 load_dotenv()
 RIOT_KEY = os.getenv('RIOT_API_KEY')
@@ -20,20 +21,19 @@ if not RIOT_KEY:
 
 REGION = "europe"
 PLATFORM = "euw1"
+TARGET_MATCHES = 50000
 
 SCRIPT_DIR = str(os.path.dirname(os.path.abspath(__file__)))
-CSV_FILENAME = str(os.path.join(SCRIPT_DIR, "..", "upgraded_drafts.csv"))
+CSV_FILENAME = str(os.path.join(SCRIPT_DIR, "../data", "upgraded_drafts.csv"))
 
 if os.path.exists(CSV_FILENAME):
     df = pd.read_csv(CSV_FILENAME, low_memory=False)
     assert isinstance(df, pd.DataFrame)
     current_rows = len(df)
-    TARGET_MATCHES = current_rows + 50000
     print(f"Found {current_rows} matches. Auto-mining until {TARGET_MATCHES}...")
+    del df # Free memory immediately
 else:
-    TARGET_MATCHES = 50000
-    print("No database found. Starting fresh and mining matches...")
-
+    print(f"No database found. Starting fresh and mining {TARGET_MATCHES} matches...")
 
 async def _load_existing_csv():
     visited_matches = set()
@@ -55,7 +55,6 @@ async def _load_existing_csv():
     print(f"Resuming from {matches_collected} matches...")
     return visited_matches, matches_collected
 
-
 async def _create_csv_headers():
     async with aiofiles.open(CSV_FILENAME, mode='w', newline='') as file:
         headers = (
@@ -68,28 +67,29 @@ async def _create_csv_headers():
         )
         await file.write(headers)
 
-
 async def _rebuild_queue(client, seed_puuid):
     puuid_queue = deque([seed_puuid])
     seen_puuids = {seed_puuid}
 
     print("Save state detected. Force-fetching seed's latest match to rebuild the player queue...")
 
-    seed_history = await client.get_match_history(seed_puuid, count=1)
-    if seed_history:
-        jumpstart_match = await client.get_match_details(seed_history[0])
-        await asyncio.sleep(1.5)
+    try:
+        seed_history = await client.get_match_history(seed_puuid, count=1)
+        if seed_history:
+            jumpstart_match = await client.get_match_details(seed_history[0])
+            await asyncio.sleep(1.5)
 
-        if jumpstart_match and 'info' in jumpstart_match:
-            for p in jumpstart_match['info']['participants']:
-                puuid = p['puuid']
-                if puuid not in seen_puuids:
-                    puuid_queue.append(puuid)
-                    seen_puuids.add(puuid)
+            if jumpstart_match and 'info' in jumpstart_match:
+                for p in jumpstart_match['info']['participants']:
+                    puuid = p['puuid']
+                    if puuid not in seen_puuids:
+                        puuid_queue.append(puuid)
+                        seen_puuids.add(puuid)
+    except Exception as e:
+        print(f"⚠️ Failed to rebuild from seed: {e}")
 
     print(f"Web Restored! Found {len(puuid_queue)} new players to branch out to.")
     return puuid_queue, seen_puuids
-
 
 def _parse_draft(participants):
     draft = {"blue": {}, "red": {}}
@@ -110,16 +110,14 @@ def _parse_draft(participants):
         }
 
         if team == "blue":
-            blue_win = 1 if p['win'] else 0
+            blue_win = 1 if p.get('win', False) else 0
 
     if len(draft["blue"]) == 5 and len(draft["red"]) == 5:
         return draft, blue_win
 
     return None, "incomplete_draft"
 
-
 def _parse_rank_string(rank_str: str) -> float:
-    # Defaults to Gold (3.0) exactly as configured in ai_wrapper.py
     if not rank_str or "Unranked" in rank_str:
         return 3.0
 
@@ -136,31 +134,28 @@ def _parse_rank_string(rank_str: str) -> float:
 
     return 3.0
 
-
 async def _fetch_player_stats(client, player_data):
     try:
         mastery = await client.get_champion_mastery(player_data['puuid'], player_data['championId'])
-    except Exception:
-        mastery = 0
+    # Specifically catch network errors, timeouts, or malformed JSON dictionaries
+    except (aiohttp.ClientError, asyncio.TimeoutError, KeyError, TypeError):
+        mastery = 0.0
 
     try:
         rank_str = await client.get_summoner_rank(player_data['puuid'])
         rank_val = _parse_rank_string(rank_str)
-    except Exception:
+    except (aiohttp.ClientError, asyncio.TimeoutError, KeyError, TypeError, ValueError):
         rank_val = 3.0
 
     return float(mastery), float(rank_val)
-
 
 async def _append_row(match_id, draft, blue_win, stats):
     row = [
         match_id,
         draft["blue"]["TOP"]["championName"], draft["blue"]["JUNGLE"]["championName"],
-        draft["blue"]["MIDDLE"]["championName"], draft["blue"]["BOTTOM"]["championName"],
-        draft["blue"]["UTILITY"]["championName"],
+        draft["blue"]["MIDDLE"]["championName"], draft["blue"]["BOTTOM"]["championName"], draft["blue"]["UTILITY"]["championName"],
         draft["red"]["TOP"]["championName"], draft["red"]["JUNGLE"]["championName"],
-        draft["red"]["MIDDLE"]["championName"], draft["red"]["BOTTOM"]["championName"],
-        draft["red"]["UTILITY"]["championName"],
+        draft["red"]["MIDDLE"]["championName"], draft["red"]["BOTTOM"]["championName"], draft["red"]["UTILITY"]["championName"],
         blue_win,
         stats["blue"]["TOP"]["mastery"], stats["blue"]["TOP"]["rank"],
         stats["blue"]["JUNGLE"]["mastery"], stats["blue"]["JUNGLE"]["rank"],
@@ -176,11 +171,10 @@ async def _append_row(match_id, draft, blue_win, stats):
     async with aiofiles.open(CSV_FILENAME, mode='a', newline='') as file:
         await file.write(",".join(str(x) for x in row) + "\n")
 
-
 async def _save_if_new(match_id, participants, visited_matches, matches_collected, client):
     visited_matches.add(match_id)
     parsed = _parse_draft(participants)
-    if parsed[0] is None:
+    if parsed is None or parsed[0] is None:
         return matches_collected
 
     draft, blue_win = parsed
@@ -194,17 +188,41 @@ async def _save_if_new(match_id, participants, visited_matches, matches_collecte
             tasks.append(_fetch_player_stats(client, draft[team][role]))
             keys.append((team, role))
 
-    # Gathers mastery and rank concurrently for maximum I/O speed.
-    results = await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    for (team, role), (mastery, rank) in zip(keys, results):
-        stats[team][role] = {"mastery": mastery, "rank": rank}
+    for (team, role), res in zip(keys, results):
+        if isinstance(res, Exception):
+            stats[team][role] = {"mastery": 0.0, "rank": 3.0}
+        else:
+            mastery, rank = res
+            stats[team][role] = {"mastery": mastery, "rank": rank}
 
     await _append_row(match_id, draft, blue_win, stats)
     matches_collected += 1
     print(f"✅ Saved Match {matches_collected}/{TARGET_MATCHES} [{match_id}]")
     return matches_collected
 
+async def _process_single_match(client, match_id, visited_matches, puuid_queue, seen_puuids, matches_collected):
+    try:
+        match_data = await client.get_match_details(match_id)
+        await asyncio.sleep(1.5)
+
+        if not match_data or 'info' not in match_data:
+            return matches_collected
+
+        participants = match_data['info']['participants']
+
+        for p in participants:
+            puuid = p.get('puuid')
+            if puuid and puuid not in seen_puuids:
+                puuid_queue.append(puuid)
+                seen_puuids.add(puuid)
+
+        return await _save_if_new(match_id, participants, visited_matches, matches_collected, client)
+
+    except Exception as e:
+        print(f"⚠️ Failed to process match {match_id}. Skipping. Error: {e}")
+        return matches_collected
 
 async def _process_match_history(client, match_history, visited_matches, puuid_queue, seen_puuids, matches_collected):
     for match_id in match_history:
@@ -214,62 +232,74 @@ async def _process_match_history(client, match_history, visited_matches, puuid_q
         if match_id in visited_matches:
             continue
 
-        match_data = await client.get_match_details(match_id)
-        await asyncio.sleep(1.5)
-
-        if not match_data or 'info' not in match_data:
-            continue
-
-        participants = match_data['info']['participants']
-
-        for p in participants:
-            puuid = p['puuid']
-            if puuid not in seen_puuids:
-                puuid_queue.append(puuid)
-                seen_puuids.add(puuid)
-
-        matches_collected = await _save_if_new(match_id, participants, visited_matches, matches_collected, client)
+        matches_collected = await _process_single_match(
+            client, match_id, visited_matches, puuid_queue, seen_puuids, matches_collected
+        )
 
     return matches_collected
 
+async def _replenish_queue_if_empty(client, puuid_queue, seen_puuids):
+    if puuid_queue:
+        return True
 
-async def mine_data(seed_game_name, seed_tag_line):
-    client = RiotAPIClient(api_key=RIOT_KEY, default_platform=PLATFORM, default_region=REGION)
-    await client.setup_cache()
+    print("🕸️ Spider hit a dead end. Fetching Challenger Ladder to jumpstart...")
+    try:
+        ladder = await client.get_challenger_ladder(queue="RANKED_SOLO_5x5")
+        for entry in ladder[:50]:
+            pid = await client.get_puuid_by_summoner_id(entry['summonerId'])
+            if pid and pid not in seen_puuids:
+                puuid_queue.append(pid)
+                seen_puuids.add(pid)
+    except Exception as e:
+        print(f"⚠️ Ladder fetch failed: {e}")
 
+    if not puuid_queue:
+        print("❌ Failsafe failed. Riot API might be down.")
+        return False
+
+    return True
+
+async def _initialize_miner_state():
     os.makedirs(os.path.dirname(CSV_FILENAME), exist_ok=True)
     visited_matches, matches_collected = await _load_existing_csv()
 
     if not os.path.exists(CSV_FILENAME):
         await _create_csv_headers()
 
-    if matches_collected >= TARGET_MATCHES:
-        print("🎯 Target already reached! No mining needed.")
-        await client.close()
-        return
+    return visited_matches, matches_collected
 
+async def _initialize_spider_queue(client, seed_game_name, seed_tag_line, matches_collected):
     print(f"🌱 Planting seed: {seed_game_name}#{seed_tag_line}")
     seed_puuid = await client.get_puuid(seed_game_name, seed_tag_line)
-    if not seed_puuid:
-        print("❌ Invalid Seed Player.")
-        await client.close()
-        return
 
-    if matches_collected > 0:
-        puuid_queue, seen_puuids = await _rebuild_queue(client, seed_puuid)
-    else:
-        puuid_queue = deque([seed_puuid])
-        seen_puuids = {seed_puuid}
+    if matches_collected > 0 and seed_puuid:
+        return await _rebuild_queue(client, seed_puuid)
+    elif seed_puuid:
+        return deque([seed_puuid]), {seed_puuid}
 
+    print("❌ Invalid Seed Player. Attempting to start from Challenger Ladder...")
+    return deque(), set()
+
+async def _run_spider_loop(client, puuid_queue, seen_puuids, visited_matches, matches_collected):
     stop_event = asyncio.Event()
+    try:
+        while not stop_event.is_set():
+            if not await _replenish_queue_if_empty(client, puuid_queue, seen_puuids):
+                break
 
-    async def spider_loop():
-        nonlocal matches_collected
-        while puuid_queue and not stop_event.is_set():
+            if len(seen_puuids) > 100000:
+                print("🧹 Memory limit reached. Flushing PUUID tracking cache...")
+                seen_puuids.clear()
+
             current_puuid = puuid_queue.popleft()
             print(f"\n🔍 Scanning new player... (Queue size: {len(puuid_queue)})")
 
-            match_history = await client.get_match_history(current_puuid, count=20)
+            try:
+                match_history = await client.get_match_history(current_puuid, count=20)
+            except Exception as e:
+                print(f"⚠️ Failed to fetch history for player. Error: {e}")
+                continue
+
             if not match_history:
                 continue
 
@@ -279,12 +309,40 @@ async def mine_data(seed_game_name, seed_tag_line):
 
             if matches_collected >= TARGET_MATCHES:
                 stop_event.set()
+                print("\n🎉 DATA MINING COMPLETE!")
 
-        print("\n🎉 DATA MINING COMPLETE!")
+    except asyncio.CancelledError:
+        print("\n🛑 Mining process forcefully cancelled.")
+        raise
+    return matches_collected
 
-    await spider_loop()
-    await client.close()
+async def mine_data(seed_game_name, seed_tag_line):
+    client = RiotAPIClient(api_key=RIOT_KEY, default_platform=PLATFORM, default_region=REGION)
+    await client.setup_cache()
 
+    matches_collected = 0
+    try:
+        visited_matches, matches_collected = await _initialize_miner_state()
+
+        if matches_collected >= TARGET_MATCHES:
+            print("🎯 Target already reached! No mining needed.")
+            return
+
+        puuid_queue, seen_puuids = await _initialize_spider_queue(
+            client, seed_game_name, seed_tag_line, matches_collected
+        )
+
+        matches_collected = await _run_spider_loop(
+            client, puuid_queue, seen_puuids, visited_matches, matches_collected
+        )
+
+    finally:
+        print(f"\n💾 Shutting down safely. Total matches preserved: {matches_collected}")
+        await client.close()
 
 if __name__ == "__main__":
-    asyncio.run(mine_data("Agurin", "DND"))
+    try:
+        asyncio.run(mine_data("Agurin", "DND"))
+    except KeyboardInterrupt:
+        print("\n🛑 Execution Interrupted by User (Ctrl+C). Terminated Safely.")
+        sys.exit(0)

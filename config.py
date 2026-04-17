@@ -28,6 +28,13 @@ QUEUE_MAP = {
     700: "Clash", 900: "URF", 1700: "Arena"
 }
 
+# Rank
+RANK_WEIGHTS = {
+    "IRON": 1, "BRONZE": 2, "SILVER": 3, "GOLD": 4,
+    "PLATINUM": 5, "EMERALD": 6, "DIAMOND": 7,
+    "MASTER": 8, "GRANDMASTER": 9, "CHALLENGER": 10
+}
+
 # The Standard Summoner Spells
 SUMMONER_SPELLS = {
     "1": "Cleanse", "3": "Exhaust", "4": "Flash",
@@ -52,8 +59,8 @@ DROPOUT_RATE = 0.25
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Models
-MODEL_PATH = os.path.join(BASE_DIR, 'models', 'Lol_draft_predictor.safetensors')
-ENCODER_PATH = os.path.join(BASE_DIR, 'models', 'champion_encoder.json')
+MODEL_PATH = os.path.join(BASE_DIR, 'data/models', 'Lol_draft_predictor.safetensors')
+ENCODER_PATH = os.path.join(BASE_DIR, 'data/models', 'champion_encoder.json')
 
 # External Factor
 SYNERGY_PATH = os.path.join(BASE_DIR, 'data', 'Synergy_Matrix.json')

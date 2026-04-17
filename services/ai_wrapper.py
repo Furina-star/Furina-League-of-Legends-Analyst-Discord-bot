@@ -140,7 +140,8 @@ class LeagueAI:
         return prediction, 1.0 - prediction, blue_synergy, red_synergy
 
     # Bridge for the /predict command to use the updated ML logic
-    def apply_hybrid_algorithm(self, base_blue_prob: float, blue_winrates: list, red_winrates: list) -> Tuple[float, float]:
+    @staticmethod
+    def apply_hybrid_algorithm(base_blue_prob: float, blue_winrates: list, red_winrates: list) -> Tuple[float, float]:
 
         # Default fallback if Riot API failed to pull stats
         if not blue_winrates or not red_winrates:
@@ -279,16 +280,20 @@ class LeagueAI:
         }
 
     # Calculates synergy and meta winrates to explain the decision.
-    def _determine_pick_reason(self, champ: str, allies: list) -> str:
+    def _determine_pick_reason(self, champ: str, allies: List[str]) -> str:
         best_syn_score = 0.0
         best_ally = ""
+
+        # Extract base winrate once and cast to float to satisfy the IDE
+        base_wr = float(self.config.get('BASE_WINRATE', 0.50))
 
         # Check for high synergy with currently locked-in allies
         for ally in allies:
             pair = sorted([champ, ally])
             pair_key = f"{pair[0]}-{pair[1]}"
             if pair_key in self.synergy_matrix:
-                syn_score = self.synergy_matrix[pair_key]["winrate"] - self.config['BASE_WINRATE']
+                # Safely extract and calculate float values
+                syn_score = float(self.synergy_matrix[pair_key].get("winrate", base_wr)) - base_wr
                 if syn_score > best_syn_score:
                     best_syn_score = syn_score
                     best_ally = ally
@@ -297,7 +302,7 @@ class LeagueAI:
             return f"High synergy with {best_ally}."
 
         # Check if it's just a raw meta monster right now
-        meta_wr = self.meta_db.get(champ, self.config['BASE_WINRATE'])
+        meta_wr = float(self.meta_db.get(champ, base_wr))
         if meta_wr >= 0.515:
             return f"Strong current meta pick ({meta_wr * 100:.1f}% WR)."
 

@@ -18,7 +18,7 @@ import os
 import logging
 import config
 import sqlite3
-from ai_wrapper import calculate_team_synergy, Model
+from services.ai_wrapper import calculate_team_synergy, Model
 
 # Get the logging system
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -28,12 +28,12 @@ logger = logging.getLogger(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 os.chdir(BASE_DIR)
 logger.info("Loading MVP Dataset...")
-df_csv = pd.read_csv("data/upgraded_drafts.csv")
+df_csv = pd.read_csv("data/training/upgraded_drafts.csv")
 
 # Extract passively mined data from the SQLite Database
 logger.info("Extracting Live Mined Data from Database...")
 db_data = []
-with sqlite3.connect("data/server_state.db") as conn:
+with sqlite3.connect("data/live/server_state.db") as conn:
     cursor = conn.cursor()
     # Fetch all passively mined matches
     cursor.execute("SELECT match_id, blue_win, payload FROM ml_training_data")
@@ -55,12 +55,12 @@ else:
 
 # Load the Synergy Matrix
 logger.info("Loading Synergy Matrix...")
-with open("data/Synergy_Matrix.json", "r") as f:
+with open("data/static/Synergy_Matrix.json", "r") as f:
     synergy_matrix = json.load(f)
 
 # Load the Meta Champions
 logger.info("Loading Meta Database...")
-with open("data/Meta_Champions.json", "r") as f:
+with open("data/static/Meta_Champions.json", "r") as f:
     meta_db = json.load(f)
 
 # Calculate Synergy Scores for every match using Pandas (Super Fast!)
@@ -102,7 +102,7 @@ for col in text_cols:
 
 # Save LabelEncoder using skops
 champion_mapping = {str(champ): int(idx) for idx, champ in enumerate(le.classes_)}
-with open("models/champion_encoder.json", "w") as f:
+with open("data/models/champion_encoder.json", "w") as f:
     json.dump(champion_mapping, f, indent=4)
 
 num_unique_champions = len(le.classes_)
@@ -133,8 +133,8 @@ scaler = StandardScaler()
 df[mastery_cols + rank_cols] = scaler.fit_transform(df[mastery_cols + rank_cols])
 
 # Save the scaler for the live Discord bot
-os.makedirs("models", exist_ok=True)
-joblib.dump(scaler, "models/scaler.pkl")
+os.makedirs("data/models", exist_ok=True)
+joblib.dump(scaler, "data/models/scaler.pkl")
 
 # --- DATA SPLITTING ---
 x_champs = df[all_cols]
@@ -213,7 +213,7 @@ for epoch in range(num_epochs):
         patience_counter = 0
 
         # Save PyTorch weights using safetensors
-        save_file(model.state_dict(), "models/Lol_draft_predictor.safetensors")
+        save_file(model.state_dict(), "data/models/Lol_draft_predictor.safetensors")
         logger.info(f"Epoch [{epoch + 1}/{num_epochs}]  |  Train Loss: {avg_train_loss:.4f}  |  Val Loss: {avg_val_loss:.4f} ⭐ (New Best!)")
     else:
         patience_counter += 1
@@ -243,7 +243,7 @@ disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=['Red Win', 'B
 fig, ax = plt.subplots(figsize=(8, 6))
 disp.plot(cmap=plt.cm.Blues, ax=ax)
 plt.title('AI Draft Predictor - Confusion Matrix')
-os.makedirs("results", exist_ok=True)
+os.makedirs("data/results", exist_ok=True)
 plt.savefig('results/confusion_matrix.png', dpi=300, bbox_inches='tight')
 plt.close()
 
