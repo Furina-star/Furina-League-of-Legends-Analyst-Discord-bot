@@ -95,11 +95,11 @@ class DraftCommands(commands.Cog):
         red_players = [(p['puuid'], p.get('summonerId'), p['championId']) for p in raw_red_team]
 
         # Use our new helper to do the heavy asynchronous lifting!
-        blue_winrates, blue_masteries, avg_blue_wr = await self.riot.fetch_team_stats(blue_players, server)
-        red_winrates, red_masteries, avg_red_wr = await self.riot.fetch_team_stats(red_players, server)
+        blue_winrates, _, avg_blue_wr = await self.riot.fetch_team_stats(blue_players, server)
+        red_winrates, _, avg_red_wr = await self.riot.fetch_team_stats(red_players, server)
 
         # Pass everything into the Hybrid Algorithm
-        final_blue_prob, final_red_prob = await asyncio.to_thread(self.ai.apply_hybrid_algorithm, base_blue_prob, blue_winrates, red_winrates, blue_masteries, red_masteries)
+        final_blue_prob, final_red_prob = await asyncio.to_thread(self.ai.apply_hybrid_algorithm, base_blue_prob, blue_winrates, red_winrates)
 
         # Send the results
         positions = ['top', 'jungle', 'mid', 'adc', 'support']

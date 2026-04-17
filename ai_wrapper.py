@@ -10,9 +10,13 @@ from itertools import combinations
 import logging
 from typing import List, Tuple, Dict, Any
 import joblib
+import warnings
 
 # Get the logging system
 logger = logging.getLogger(__name__)
+
+# Suppress sklearn feature name warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
 
 # Define the Model Architecture
 class Model(nn.Module):
@@ -136,8 +140,27 @@ class LeagueAI:
         return prediction, 1.0 - prediction, blue_synergy, red_synergy
 
     # Bridge for the /predict command to use the updated ML logic
-    def apply_hybrid_algorithm(self, draft_dict: Dict[str, Any]) -> Tuple[float, float, float, float]:
-        return self.predict_match(draft_dict)
+    def apply_hybrid_algorithm(self, base_blue_prob: float, blue_winrates: list, red_winrates: list) -> Tuple[float, float]:
+
+        # Default fallback if Riot API failed to pull stats
+        if not blue_winrates or not red_winrates:
+            return base_blue_prob, 1.0 - base_blue_prob
+
+        # Calculate average winrates. If they are in 0-100 format, normalize to 0.0-1.0
+        avg_blue_wr = sum(blue_winrates) / len(blue_winrates)
+        if avg_blue_wr > 1.0: avg_blue_wr /= 100.0
+
+        avg_red_wr = sum(red_winrates) / len(red_winrates)
+        if avg_red_wr > 1.0: avg_red_wr /= 100.0
+
+        # Calculate a winrate shift (allowing player skill to swing the ML prediction by up to 25%)
+        skill_diff = avg_blue_wr - avg_red_wr
+        final_blue_prob = base_blue_prob + (skill_diff * 0.25)
+
+        # Clamp the results to valid probabilities (1% to 99%)
+        final_blue_prob = max(0.01, min(0.99, final_blue_prob))
+
+        return final_blue_prob, 1.0 - final_blue_prob
 
     # Bridge for the Live Tracker to use the updated ML logic
     def predict_live_match(self, draft_dict: Dict[str, Any]) -> Tuple[float, float, float, float]:
