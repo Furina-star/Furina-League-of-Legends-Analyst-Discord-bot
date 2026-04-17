@@ -165,6 +165,27 @@ class RiotAPIClient:
         data = await self._fetch(url, cache_ttl=3600)
         return data if isinstance(data, list) else []
 
+    # Initiate Challenger Ladder API as a function
+    async def get_challenger_ladder(self, platform_override: Optional[str] = None,queue: str = "RANKED_SOLO_5x5") -> list:
+        p = (platform_override or self.platform).lower()
+        url = f"https://{p}.api.riotgames.com/lol/league/v4/challengerleagues/by-queue/{queue}"
+        data = await self._fetch(url, cache_ttl=3600)
+
+        if isinstance(data, dict) and 'entries' in data:
+            # Sort by league points so we scrape the literal best players first
+            return sorted(data['entries'], key=lambda x: x.get('leaguePoints', 0), reverse=True)
+        return []
+
+    # Initiate Summoner ID to PUUID conversion as a function
+    async def get_puuid_by_summoner_id(self, summoner_id: str, platform_override: Optional[str] = None) -> Optional[str]:
+        p = (platform_override or self.platform).lower()
+        url = f"https://{p}.api.riotgames.com/lol/summoner/v4/summoners/{summoner_id}"
+        data = await self._fetch(url, cache_ttl=86400)  # Cached for 24 hours to save API calls
+
+        if isinstance(data, dict):
+            return data.get('puuid')
+        return None
+
     # Helper function to format the rank string
     @staticmethod
     def _format_rank_str(queue_data):
