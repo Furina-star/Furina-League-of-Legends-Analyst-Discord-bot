@@ -1,13 +1,8 @@
 """
-This script automates the entire "Rolling Window" update process.
-
-BEFORE RUNNING:
-1. Open `data_miner.py` and increase `TARGET_MATCHES` by 5,000 (e.g., 50000 -> 55000).
-2. Save `data_miner.py`.
-3. Run this script! It will handle the rest.
+This script automates the entire AI Evolution process.
+Run this once a week to absorb all passively mined data, update the meta JSONs, and retrain the PyTorch model.
 """
 
-import pandas as pd
 import subprocess
 import sys
 import os
@@ -16,51 +11,31 @@ SCRIPT_DIR = str(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = str(os.path.dirname(SCRIPT_DIR))
 ROOT_DIR = os.path.dirname(DATA_DIR)
 
-def run_script(script_name):
-    script_path = str(os.path.join(SCRIPT_DIR, script_name))
-    print(f"\n🚀 Starting: {script_path}...")
+def run_script(script_name, cwd=SCRIPT_DIR):
+    script_path = str(os.path.join(cwd, script_name))
+    print(f"\n🚀 Starting: {script_name}...")
     try:
         subprocess.run([sys.executable, script_path], check=True, cwd=ROOT_DIR)
-        print(f"Finished: {script_path}!")
+        print(f"✅ Finished: {script_name}!")
     except subprocess.CalledProcessError:
-        print(f"\nError occurred while running {script_path}.")
+        print(f"\n❌ Error occurred while running {script_name}.")
         sys.exit(1)
-
-
-def prune_database():
-    csv_path = str(os.path.join(DATA_DIR, "[OLD]ranked_drafts.csv"))
-    print(f"\n Loading matches from {csv_path}...")
-
-    if not os.path.exists(csv_path):
-        print(f"Error: Could not find {csv_path}!")
-        sys.exit(1)
-
-    df = pd.read_csv(filepath_or_buffer=csv_path, low_memory=False)
-    assert isinstance(df, pd.DataFrame)
-
-    original_count = len(df)
-    df = df.tail(50000)
-    df.to_csv(csv_path, index=False)
-    print(f"✅ Successfully pruned {original_count - len(df)} old matches. CSV is back to 50k!")
-
 
 if __name__ == "__main__":
-    print("Starting Autonomous Pipeline...")
+    print("Starting Autonomous AI Evolution Pipeline...")
 
-    run_script("data_miner.py")
-    prune_database()
+    # Rebuild Heuristics from the hybrid data
     run_script("build_synergy_matrix.py")
     run_script("build_meta.py")
+    run_script("update_roles.py")
+
+    # Static data updates from Riot
     run_script("build_items.py")
     run_script("build_runes.py")
 
-    # Dynamic path for train_model.py in the root directory
-    main_dir = os.path.dirname(DATA_DIR)
-    train_script = os.path.join(main_dir, "train_model.py")
-    print(f"\n🚀 Starting: {train_script}...")
-    try:
-        subprocess.run([sys.executable, train_script], check=True)
-    except subprocess.CalledProcessError:
-        sys.exit(1)
+    # Retrain the Deep Learning Model
+    print("\n🧠 Initiating Deep Learning Retraining...")
+    # Point execution to the root directory for train_model.py
+    run_script("train_model.py", cwd=ROOT_DIR)
 
-    print("Pipeline Complete!")
+    print("\n🏆 Pipeline Complete! The AI is fully updated and ready for Discord.")

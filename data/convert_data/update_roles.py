@@ -1,21 +1,42 @@
 """
-This File, updates Champion_Roles.json where it designates champions to their role according to meta.
+This File updates Champion_Roles.json where it designates champions to their role according to meta.
+It utilizes the hybrid dataset of baseline CSV and passively mined database data.
 """
 
 import pandas as pd
 import json
 import os
+import sqlite3
 
 SCRIPT_DIR = str(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = str(os.path.dirname(SCRIPT_DIR))
-DEFAULT_CSV = str(os.path.join(DATA_DIR, "[OLD]ranked_drafts.csv"))
-DEFAULT_JSON = str(os.path.join(DATA_DIR, "Champion_Roles.json"))
+CSV_PATH = os.path.join(DATA_DIR, "upgraded_drafts.csv")
+DB_PATH = os.path.join(DATA_DIR, "server_state.db")
+JSON_PATH = os.path.join(DATA_DIR, "Champion_Roles.json")
 
-def generate_dynamic_roles(csv_path=DEFAULT_CSV, output_path=DEFAULT_JSON):
-    print(f"Reading match data from {csv_path}...")
+def generate_dynamic_roles():
+    print(f"Loading hybrid data from {CSV_PATH} and {DB_PATH}...")
+    df_csv = pd.read_csv(CSV_PATH, low_memory=False)
 
-    # Use low_memory=False to prevent chunking warnings
-    df = pd.read_csv(filepath_or_buffer=csv_path, low_memory=False)
+    db_data = []
+    if os.path.exists(DB_PATH):
+        with sqlite3.connect(DB_PATH) as conn:
+            try:
+                cursor = conn.cursor()
+                cursor.execute("SELECT match_id, blue_win, payload FROM ml_training_data")
+                for match_id, blue_win, payload_str in cursor.fetchall():
+                    payload = json.loads(payload_str)
+                    payload['blueWin'] = blue_win
+                    db_data.append(payload)
+            except Exception:
+                pass # Table might not exist yet
+
+    if db_data:
+        df_db = pd.DataFrame(db_data)
+        df = pd.concat([df_csv, df_db], ignore_index=True)
+    else:
+        df = df_csv
+
     assert isinstance(df, pd.DataFrame)
 
     print(f"Analyzed {len(df)} matches. Sorting champions into meta buckets using vectorization...")
@@ -48,8 +69,8 @@ def generate_dynamic_roles(csv_path=DEFAULT_CSV, output_path=DEFAULT_JSON):
 
     # Load the existing JSON to preserve our static Macro categories!
     existing_db = {}
-    if os.path.exists(output_path):
-        with open(output_path, "r") as f:
+    if os.path.exists(JSON_PATH):
+        with open(JSON_PATH, "r") as f:
             existing_db = json.load(f)
 
     # Instantly extract the champions that meet the thresholds
@@ -73,10 +94,10 @@ def generate_dynamic_roles(csv_path=DEFAULT_CSV, output_path=DEFAULT_JSON):
     }
 
     # Save over the old JSON file
-    with open(output_path, "w") as f:
+    with open(JSON_PATH, "w") as f:
         json.dump(new_db, f, indent=4)
 
-    print("Successfully created a highly optimized, data-driven database!")
+    print("Successfully created a highly optimized, data-driven roles database!")
 
 if __name__ == "__main__":
     generate_dynamic_roles()

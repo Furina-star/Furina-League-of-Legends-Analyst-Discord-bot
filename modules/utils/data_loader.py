@@ -10,7 +10,7 @@ import os
 import requests
 from config import (
     KEYSTONE_RUNES_PATH, ITEM_DICT_PATH, SUMMONER_SPELLS,
-    META_PATH, ROLES_PATH, CHAMP_DICT_PATH
+    META_PATH, ROLES_PATH, CHAMP_DICT_PATH, SYNERGY_PATH
 )
 
 # Get the logging system
@@ -36,6 +36,7 @@ RUNE_DB = _load_json(KEYSTONE_RUNES_PATH)
 SPELL_DB = SUMMONER_SPELLS
 META_DB = _load_json(META_PATH)
 ROLE_DB = _load_json(ROLES_PATH)
+SYNERGY_MATRIX = _load_json(SYNERGY_PATH)
 
 # Reverse lookup: "Zhonya's Hourglass" -> 3157
 # Filter to base item IDs only (4 digits, no Ornn upgrade prefixes)

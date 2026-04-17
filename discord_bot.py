@@ -19,7 +19,7 @@ from riot_api import RiotAPIClient
 from ai_wrapper import LeagueAI
 from modules.utils.translator import DiscordTranslator
 from modules.utils.logger_algorithm import initialize_logger
-from modules.utils.data_loader import load_champion_mapping, META_DB, ROLE_DB, RUNE_DB
+from modules.utils.data_loader import load_champion_mapping, META_DB, ROLE_DB, RUNE_DB, SYNERGY_MATRIX
 from modules.utils.database_manager import DatabaseManager
 
 # Get the logging system
@@ -49,6 +49,7 @@ class DiscordBot(commands.Bot):
         self.meta_db = META_DB
         self.role_db = ROLE_DB
         self.keystone_db = RUNE_DB
+        self.synergy_matrix = SYNERGY_MATRIX
         self.server_dict = config.PLATFORM_ROUTING
 
         # Initialize APIs

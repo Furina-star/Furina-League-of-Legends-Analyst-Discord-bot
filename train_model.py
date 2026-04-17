@@ -18,43 +18,11 @@ import os
 import logging
 import config
 import sqlite3
-from ai_wrapper import calculate_team_synergy
+from ai_wrapper import calculate_team_synergy, Model
 
 # Get the logging system
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-class Model(nn.Module):
-    def __init__(self, num_champions, embedding_dim=16, num_champs_in_match=10,
-                 num_extra_features=32, dropout_rate=0.25):
-        super().__init__()
-        self.embedding = nn.Embedding(num_embeddings=num_champions, embedding_dim=embedding_dim)
-
-        input_size = (num_champs_in_match * embedding_dim) + num_extra_features
-
-        self.net = nn.Sequential(
-            nn.Linear(input_size, 256),
-            nn.BatchNorm1d(256),
-            nn.ReLU(),
-            nn.Dropout(dropout_rate),
-            nn.Linear(256, 128),
-            nn.BatchNorm1d(128),
-            nn.ReLU(),
-            nn.Dropout(dropout_rate),
-            nn.Linear(128, 64),
-            nn.BatchNorm1d(64),
-            nn.ReLU(),
-            nn.Dropout(dropout_rate),
-            nn.Linear(64, 1),
-            nn.Sigmoid()
-        )
-
-    def forward(self, x, synergy_scores, meta_rates, masteries, ranks):
-        embedded = self.embedding(x)
-        flattened = embedded.view(x.size(0), -1)
-        # Concatenate all 5 features (Champions + Synergy + Meta + Masteries + Ranks)
-        combined = torch.cat((flattened, synergy_scores, meta_rates, masteries, ranks), dim=1)
-        return self.net(combined)
 
 # Load your CUSTOM Mined Data
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

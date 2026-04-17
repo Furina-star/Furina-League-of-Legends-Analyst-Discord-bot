@@ -1,22 +1,42 @@
 """
 This file build the Meta_Champions.json file.
-It reads the [OLD]ranked_drafts.csv file, calculates the global win rates for each champion, and saves it as a JSON file.
-This is used in the postgame review to show how well the champion performed in the current meta.
+It reads the upgraded_drafts.csv file AND the passively mined SQLite database,
+calculates the global win rates for each champion, and saves it as a JSON file.
 """
 
 import pandas as pd
 import json
 import os
+import sqlite3
 
 SCRIPT_DIR = str(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = str(os.path.dirname(SCRIPT_DIR))
-CSV_PATH = os.path.join(DATA_DIR, "[OLD]ranked_drafts.csv")
+CSV_PATH = os.path.join(DATA_DIR, "upgraded_drafts.csv")
+DB_PATH = os.path.join(DATA_DIR, "server_state.db")
 JSON_PATH = os.path.join(DATA_DIR, "Meta_Champions.json")
 
 def build_meta_database():
-    print(f"Reading match data from {CSV_PATH}...")
+    print(f"Loading hybrid data from {CSV_PATH} and {DB_PATH}...")
+    df_csv = pd.read_csv(CSV_PATH, low_memory=False)
 
-    df: pd.DataFrame = pd.read_csv(CSV_PATH)
+    db_data = []
+    if os.path.exists(DB_PATH):
+        with sqlite3.connect(DB_PATH) as conn:
+            try:
+                cursor = conn.cursor()
+                cursor.execute("SELECT match_id, blue_win, payload FROM ml_training_data")
+                for match_id, blue_win, payload_str in cursor.fetchall():
+                    payload = json.loads(payload_str)
+                    payload['blueWin'] = blue_win
+                    db_data.append(payload)
+            except Exception:
+                pass # Table might not exist yet if bot hasn't mined anything
+
+    if db_data:
+        df_db = pd.DataFrame(db_data)
+        df = pd.concat([df_csv, df_db], ignore_index=True)
+    else:
+        df = df_csv
 
     print(f"Calculating Global Win Rates across {len(df)} matches using Pandas Vectorization...")
 
@@ -54,7 +74,6 @@ def build_meta_database():
         json.dump(final_meta, f, indent=4)
 
     print(f"Meta Database built successfully! Tracked {len(final_meta)} champions.")
-
 
 if __name__ == "__main__":
     build_meta_database()

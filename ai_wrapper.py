@@ -90,6 +90,10 @@ class LeagueAI:
 
     # This function takes in a draft dictionary, preprocesses it, and returns the predicted win probability for the blue team
     def predict_match(self, draft_dict: Dict[str, str]) -> Tuple[float, float, float, float]:
+        if not self.ai_ready:
+            logger.warning("AI Model not ready. Returning default 50/50 prediction.")
+            return 0.5, 0.5, 0.0, 0.0
+
         correct_order = [
             'blueTopChamp', 'blueJungleChamp', 'blueMiddleChamp', 'blueADCChamp', 'blueSupportChamp',
             'redTopChamp', 'redJungleChamp', 'redMiddleChamp', 'redADCChamp', 'redSupportChamp'
@@ -99,7 +103,7 @@ class LeagueAI:
 
         # Safe encoding that never crashes on 'unknown'
         encoded_list = [
-            self.champ_encoder.get(champ, 0)
+            self.champion_mapping.get(champ, 0)
             for champ in raw_champs
         ]
 
