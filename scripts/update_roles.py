@@ -12,32 +12,56 @@ SCRIPT_DIR = str(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR  = os.path.join(os.path.dirname(SCRIPT_DIR), "data")
 CSV_PATH  = os.path.join(DATA_DIR, "training", "upgraded_drafts.csv")
 DB_PATH   = os.path.join(DATA_DIR, "live", "server_state.db")
-JSON_PATH = os.path.join(DATA_DIR, "static", "Meta_Champions.json")
+JSON_PATH = os.path.join(DATA_DIR, "static", "Champion_Roles.json")
 
-def generate_dynamic_roles():
-    print(f"Loading hybrid data from {CSV_PATH} and {DB_PATH}...")
-    df_csv = pd.read_csv(CSV_PATH, low_memory=False)
+# Load CSV
+def _load_csv_data(csv_path: str) -> pd.DataFrame:
+    try:
+        df_csv = pd.read_csv(filepath_or_buffer=csv_path, low_memory=False)
+        if not isinstance(df_csv, pd.DataFrame):
+            raise TypeError("Expected a DataFrame from read_csv, got TextFileReader instead.")
+        return df_csv
+    except FileNotFoundError:
+        print(f"No CSV found at {csv_path}. Starting with empty DataFrame.")
+        return pd.DataFrame()
+
+# Load the Database
+def _load_db_data(db_path: str) -> pd.DataFrame:
+    if not os.path.exists(db_path):
+        return pd.DataFrame()
 
     db_data = []
-    if os.path.exists(DB_PATH):
-        with sqlite3.connect(DB_PATH) as conn:
-            try:
-                cursor = conn.cursor()
-                cursor.execute("SELECT match_id, blue_win, payload FROM ml_training_data")
-                for match_id, blue_win, payload_str in cursor.fetchall():
+    with sqlite3.connect(db_path) as conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT match_id, blue_win, payload FROM ml_training_data")
+            for match_id, blue_win, payload_str in cursor.fetchall():
+                try:
                     payload = json.loads(payload_str)
                     payload['blueWin'] = blue_win
                     db_data.append(payload)
-            except Exception:
-                pass # Table might not exist yet
+                except json.JSONDecodeError:
+                    continue
+        except sqlite3.Error as e:
+            print(f"Failed to read database: {e}")
 
-    if db_data:
-        df_db = pd.DataFrame(db_data)
-        df = pd.concat([df_csv, df_db], ignore_index=True)
-    else:
-        df = df_csv
+    return pd.DataFrame(db_data) if db_data else pd.DataFrame()
 
-    assert isinstance(df, pd.DataFrame)
+# The Main Function
+def generate_dynamic_roles() -> None:
+    print(f"Loading hybrid data from {CSV_PATH} and {DB_PATH}...")
+
+    df_csv = _load_csv_data(CSV_PATH)
+    df_db = _load_db_data(DB_PATH)
+
+    # Combine datasets safely
+    if df_csv.empty and df_db.empty:
+        print("❌ No data available to update roles.")
+        return
+
+    # Fixes IDE concat warnings by guaranteeing strict DataFrame lists
+    df_list = [df for df in [df_csv, df_db] if not df.empty]
+    df = pd.concat(df_list, ignore_index=True)
 
     print(f"Analyzed {len(df)} matches. Sorting champions into meta buckets using vectorization...")
 
@@ -46,6 +70,7 @@ def generate_dynamic_roles():
     red_cols = ['redTop', 'redJungle', 'redMid', 'redADC', 'redSupport']
 
     melted = df[blue_cols + red_cols].melt(var_name='position', value_name='champion')
+    del df  # Free up RAM instantly
 
     # Standardize specific positions into the 5 main roles
     role_mapping = {
@@ -59,6 +84,7 @@ def generate_dynamic_roles():
 
     # Instantly build a matrix of Champions (rows) vs Roles (columns)
     counts = pd.crosstab(melted['champion'], melted['role'])
+    del melted  # Free up RAM instantly
 
     # Calculate total games and drop anomalies (< 10 total games)
     counts['total'] = counts.sum(axis=1)
@@ -66,12 +92,16 @@ def generate_dynamic_roles():
 
     # Divide all roles by the total simultaneously to get percentages
     pct = valid_champs.drop(columns=['total']).div(valid_champs['total'], axis=0)
+    del valid_champs, counts  # Free up RAM instantly
 
     # Load the existing JSON to preserve our static Macro categories!
     existing_db = {}
     if os.path.exists(JSON_PATH):
-        with open(JSON_PATH, "r") as f:
-            existing_db = json.load(f)
+        try:
+            with open(JSON_PATH, "r", encoding="utf-8") as f:
+                existing_db = json.load(f)
+        except json.JSONDecodeError:
+            print("⚠️ Corrupted JSON found, starting fresh macro categories.")
 
     # Instantly extract the champions that meet the thresholds
     new_db = {
@@ -93,8 +123,11 @@ def generate_dynamic_roles():
         "SCALING": existing_db.get("SCALING", [])
     }
 
+    # Safely create directories if they don't exist yet
+    os.makedirs(os.path.dirname(JSON_PATH), exist_ok=True)
+
     # Save over the old JSON file
-    with open(JSON_PATH, "w") as f:
+    with open(JSON_PATH, "w", encoding="utf-8") as f:
         json.dump(new_db, f, indent=4)
 
     print("Successfully created a highly optimized, data-driven roles database!")
