@@ -15,6 +15,8 @@ from discord.utils import escape_mentions
 from modules.utils.parsers import parse_riot_id, sort_team_roles, extract_live_player_names
 from modules.interface.discord_helpers import server_autocomplete
 from modules.interface.canvas_engine import render_draft_board
+from modules.utils.constants import CMD_PREDICT, DESC_PREDICT, CMD_SCOUT, DESC_SCOUT, ARG_REGION, ARG_RIOT_ID, \
+    CMD_COACH, DESC_COACH
 
 # Get the logging system
 logger = logging.getLogger(__name__)
@@ -34,8 +36,8 @@ class DraftCommands(commands.Cog):
 
     # Getting the Live game command.
     # Predict the win condition before the game starts
-    @app_commands.command(name="predict", description="Calculates win probability for a live match.")
-    @app_commands.describe(server="The server region (e.g., NA1, EUW1, KR)", full_riot_id="The player's Riot ID (e.g., Doublelift#NA1)")
+    @app_commands.command(name=CMD_PREDICT, description=DESC_PREDICT)
+    @app_commands.describe(region=ARG_REGION,riot_id=ARG_RIOT_ID)
     @app_commands.checks.cooldown(1, 5, key=lambda i: i.user.id)
     @app_commands.checks.cooldown(2, 5, key=lambda i: None)
     @app_commands.autocomplete(server=server_autocomplete)
@@ -135,8 +137,8 @@ class DraftCommands(commands.Cog):
 
     # Getting the enemy information.
     # This part checks what type of bs the enemy team is running
-    @app_commands.command(name="scout", description="Builds an enemy dossier for a live match.")
-    @app_commands.describe(server="The server region (e.g., NA1, EUW1, KR)", full_riot_id="The player's Riot ID (e.g., Doublelift#NA1)")
+    @app_commands.command(name=CMD_SCOUT, description=DESC_SCOUT)
+    @app_commands.describe(region=ARG_REGION,riot_id=ARG_RIOT_ID)
     @app_commands.checks.cooldown(1, 5, key=lambda i: i.user.id)
     @app_commands.checks.cooldown(2, 5, key=lambda i: None)
     @app_commands.autocomplete(server=server_autocomplete)
@@ -188,7 +190,7 @@ class DraftCommands(commands.Cog):
 
     # A draft pick coach
     # This is where it suggests champions based on current draft picks
-    @app_commands.command(name="coach", description="Spawns an interactive live draft dashboard for rapid AI coaching.")
+    @app_commands.command(name=CMD_COACH, description=DESC_COACH)
     @app_commands.choices(
         role=[
             app_commands.Choice(name="Top", value="top"),

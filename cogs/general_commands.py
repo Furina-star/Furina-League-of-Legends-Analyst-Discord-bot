@@ -15,6 +15,13 @@ from modules.interface.embed_formatter import build_help_embed
 from modules.interface.discord_helpers import server_autocomplete
 from modules.persona.verdicts import GUILTY_TEMPLATES, PLOT_TWIST_TEMPLATES, MERCY_TEMPLATES, SENTENCE_TEMPLATES
 from modules.utils.state_resolvers import resolve_link_state
+from modules.utils.constants import (
+    CMD_LINK, DESC_LINK, CMD_UNLINK, DESC_UNLINK,
+    ARG_RIOT_ID, ARG_REGION, CMD_PING, DESC_PING,
+    CMD_HELP, DESC_HELP, CMD_TRIAL, DESC_TRIAL,
+    ARG_MATCH_INDEX,CMD_CONFESS, DESC_CONFESS,
+    ARG_SIN
+)
 
 # Get the logger system
 logger = logging.getLogger("discord")
@@ -38,22 +45,22 @@ class GeneralCommands(commands.Cog):
         return deck.pop(0).format(**kwargs)
 
     # The ping command
-    @app_commands.command(name="ping", description="Checks if Furina is online and functioning.")
+    @app_commands.command(name=CMD_PING, description=DESC_PING)
     async def ping(self, interaction: discord.Interaction):
         # Calculate the latency in milliseconds
         latency = round(self.bot.latency * 1000)
         await interaction.response.send_message(f"I'm online and ready to analyze! **Latency: {latency}ms**.")
 
     # The help command
-    @app_commands.command(name="help", description="Displays the Furina League Analyst help menu.")
+    @app_commands.command(name=CMD_HELP, description=DESC_HELP)
     async def help_command(self, interaction: discord.Interaction):
         embed = build_help_embed()
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # The Trial command
     # What does it do? put the victim in trial and let furina judge for fun.
-    @app_commands.command(name="trial", description="Judge who truly threw the game and deliver a final verdict.")
-    @app_commands.describe(defendant="The duo partner you are accusing.")
+    @app_commands.command(name=CMD_TRIAL, description=DESC_TRIAL)
+    @app_commands.describe(match_index=ARG_MATCH_INDEX)
     async def trial(self, interaction: discord.Interaction, defendant: discord.Member):
         await interaction.response.send_message(f"⚖️ **The court is now in session!**\n{interaction.user.mention} accuses {defendant.mention} of atrocious gameplay.")
 
@@ -72,8 +79,8 @@ class GeneralCommands(commands.Cog):
 
     # The Confess command
     # What does it do? the victim can plead again
-    @app_commands.command(name="confess", description="Admit your horrific misplays and beg the Oratrice for mercy.")
-    @app_commands.describe(crime="What atrocious play did you commit?")
+    @app_commands.command(name=CMD_CONFESS, description=DESC_CONFESS)
+    @app_commands.describe(sin=ARG_SIN)
     async def confess(self, interaction: discord.Interaction, crime: str):
         await interaction.response.send_message(f"🙏 {interaction.user.mention} has approached the stand to confess: **\"{crime}\"**")
 
@@ -92,8 +99,8 @@ class GeneralCommands(commands.Cog):
 
     # The Link Command
     # This is where it links Riot PUUID to Discord ID, so we can track their games and stats.
-    @app_commands.command(name="link", description="Link your Riot ID to the Oratrice for Hall of Shame tracking.")
-    @app_commands.describe(server="The server region (e.g., NA1, EUW1)", full_riot_id="Your Riot ID (e.g., Name#Tag)")
+    @app_commands.command(name=CMD_LINK, description=DESC_LINK)
+    @app_commands.describe(region=ARG_REGION, riot_id=ARG_RIOT_ID)
     @app_commands.checks.cooldown(1, 2, key=lambda i: i.user.id)
     @app_commands.autocomplete(server=server_autocomplete)
     async def link(self, interaction: discord.Interaction, server: str, full_riot_id: str):
@@ -148,7 +155,7 @@ class GeneralCommands(commands.Cog):
 
     # The Unlink Command
     # Unlink the Riot ID from the Discord User
-    @app_commands.command(name="unlink", description="Sever your ties with the Oratrice and remove your linked Riot ID.")
+    @app_commands.command(name=CMD_UNLINK, description=DESC_UNLINK)
     @app_commands.checks.cooldown(1, 2, key=lambda i: i.user.id)
     async def unlink(self, interaction: discord.Interaction):
         try:
