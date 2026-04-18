@@ -9,12 +9,12 @@ This separation of concerns allows for a cleaner and more organized codebase, ma
 
 import asyncio
 import discord
-from discord.ext import commands
-from discord import app_commands
 import os
 import sys
 import traceback
 import config
+from discord.ext import commands
+from discord import app_commands
 from services.riot_api import RiotAPIClient
 from services.ai_wrapper import LeagueAI
 from modules.utils.translator import DiscordTranslator
