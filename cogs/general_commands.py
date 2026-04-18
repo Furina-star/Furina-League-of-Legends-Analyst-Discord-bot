@@ -15,6 +15,7 @@ from modules.interface.embed_formatter import build_help_embed
 from modules.interface.discord_helpers import server_autocomplete
 from modules.persona.verdicts import GUILTY_TEMPLATES, PLOT_TWIST_TEMPLATES, MERCY_TEMPLATES, SENTENCE_TEMPLATES
 from modules.utils.state_resolvers import resolve_link_state
+from discord.app_commands import locale_str as _
 from modules.utils.constants import (
     CMD_LINK, DESC_LINK, CMD_UNLINK, DESC_UNLINK,
     ARG_RIOT_ID, ARG_REGION, CMD_PING, DESC_PING,
@@ -45,22 +46,22 @@ class GeneralCommands(commands.Cog):
         return deck.pop(0).format(**kwargs)
 
     # The ping command
-    @app_commands.command(name=CMD_PING, description=DESC_PING)
+    @app_commands.command(name=_(CMD_PING), description=_(DESC_PING))
     async def ping(self, interaction: discord.Interaction):
         # Calculate the latency in milliseconds
         latency = round(self.bot.latency * 1000)
         await interaction.response.send_message(f"I'm online and ready to analyze! **Latency: {latency}ms**.")
 
     # The help command
-    @app_commands.command(name=CMD_HELP, description=DESC_HELP)
+    @app_commands.command(name=_(CMD_HELP), description=_(DESC_HELP))
     async def help_command(self, interaction: discord.Interaction):
         embed = build_help_embed()
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # The Trial command
     # What does it do? put the victim in trial and let furina judge for fun.
-    @app_commands.command(name=CMD_TRIAL, description=DESC_TRIAL)
-    @app_commands.describe(match_index=ARG_MATCH_INDEX)
+    @app_commands.command(name=_(CMD_TRIAL), description=_(DESC_TRIAL))
+    @app_commands.describe(match_index=_(ARG_MATCH_INDEX))
     async def trial(self, interaction: discord.Interaction, defendant: discord.Member):
         await interaction.response.send_message(f"⚖️ **The court is now in session!**\n{interaction.user.mention} accuses {defendant.mention} of atrocious gameplay.")
 
@@ -79,8 +80,8 @@ class GeneralCommands(commands.Cog):
 
     # The Confess command
     # What does it do? the victim can plead again
-    @app_commands.command(name=CMD_CONFESS, description=DESC_CONFESS)
-    @app_commands.describe(sin=ARG_SIN)
+    @app_commands.command(name=_(CMD_CONFESS), description=_(DESC_CONFESS))
+    @app_commands.describe(sin=_(ARG_SIN))
     async def confess(self, interaction: discord.Interaction, crime: str):
         await interaction.response.send_message(f"🙏 {interaction.user.mention} has approached the stand to confess: **\"{crime}\"**")
 

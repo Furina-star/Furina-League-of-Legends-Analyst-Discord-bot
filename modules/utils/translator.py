@@ -23,7 +23,7 @@ class DiscordTranslator(app_commands.Translator):
     def _load_all_locales(self):
         # Resolve the absolute path to your data/locales folder
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        locales_dir = os.path.abspath(os.path.join(base_dir, "../../data/locales"))
+        locales_dir = os.path.abspath(os.path.join(base_dir, "../../data/locale"))
 
         if not os.path.exists(locales_dir):
             logger.warning(f"Locales directory not found at {locales_dir}. Translations disabled.")

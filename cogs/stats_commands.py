@@ -12,6 +12,7 @@ from modules.interface.views import MatchCycleView
 from modules.utils.parsers import parse_riot_id, extract_postgame_stats
 from modules.utils.state_resolvers import resolve_match_eligibility
 from modules.utils.database_manager import DatabaseManager
+from discord.app_commands import locale_str as _
 from modules.utils.constants import CMD_POSTGAME, DESC_POSTGAME, ARG_REGION, ARG_RIOT_ID
 
 # Get the logging system
@@ -26,8 +27,8 @@ class StatsCommands(commands.Cog):
 
     # Getting the last game or post match review command
     # Identify what the player did after the game.
-    @app_commands.command(name=CMD_POSTGAME, description=DESC_POSTGAME)
-    @app_commands.describe(server=ARG_REGION,full_riot_id=ARG_RIOT_ID)
+    @app_commands.command(name=_(CMD_POSTGAME), description=_(DESC_POSTGAME))
+    @app_commands.describe(server=_(ARG_REGION),full_riot_id=_(ARG_RIOT_ID))
     @app_commands.checks.cooldown(1, 2, key=lambda i: i.user.id)
     @app_commands.autocomplete(server=server_autocomplete)
     async def postgame(self, interaction: discord.Interaction, server: str, full_riot_id: str):

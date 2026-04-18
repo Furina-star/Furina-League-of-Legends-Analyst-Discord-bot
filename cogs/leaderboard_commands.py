@@ -7,13 +7,14 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from modules.interface.embed_formatter import build_hall_of_shame_embed
+from discord.app_commands import locale_str as _
 from modules.utils.constants import CMD_HALLOFSHAME, DESC_HALLOFSHAME
 
 class LeaderboardCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name=CMD_HALLOFSHAME, description=DESC_HALLOFSHAME)
+    @app_commands.command(name=_(CMD_HALLOFSHAME), description=_(DESC_HALLOFSHAME))
     @app_commands.checks.cooldown(1, 2, key=lambda i: i.user.id)
     async def hallofshame(self, interaction: discord.Interaction):
         guild = interaction.guild
