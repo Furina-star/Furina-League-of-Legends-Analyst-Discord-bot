@@ -167,5 +167,4 @@ class GeneralCommands(commands.Cog):
 # Setup hook to load the Cog
 async def setup(bot):
     cog = GeneralCommands(bot)
-    await cog.bot.db.init_db()
     await bot.add_cog(cog)

@@ -10,7 +10,7 @@ async def resolve_link_state(db, user_id: int, new_puuid: str, new_riot_id: str)
     # First Time Linking
     if not current_link:
         return False, f"✅ Successfully linked **{new_riot_id}** to your Discord account. You are now eligible for the Hall of Shame."
-    old_riot_id, old_puuid = current_link
+    old_riot_id, old_puuid, _ = current_link  # unpack all 3, ignore server
 
     # Swapping to a completely new account
     if old_puuid != new_puuid:
@@ -33,6 +33,6 @@ def resolve_match_eligibility(game_duration: int, queue_id: int) -> tuple[bool, 
     # We only want Summoner's Rift PvP matches including ARAM
     valid_queues = {400, 420, 430, 440, 490, 450}
     if queue_id not in valid_queues:
-        return False, "The Hall of Shame only accepts Summoner's Rift PvP matches. Rotating modes and ARAMs are exempt from judgment."
+        return False, "The Hall of Shame only accepts Summoner's Rift PvP matches including ARAM."
 
     return True, "Match is eligible."

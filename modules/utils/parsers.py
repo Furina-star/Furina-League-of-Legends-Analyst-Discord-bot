@@ -297,7 +297,8 @@ def quick_resolve_champion(raw_name: str, champ_db: dict) -> str:
         "ez": "Ezreal", "cait": "Caitlyn", "tris": "Tristana",
         "kata": "Katarina", "cho": "Chogath", "rek": "RekSai",
         "kog": "KogMaw", "naut": "Nautilus", "sej": "Sejuani",
-        "ksante": "KSante", "bel": "Belveth"
+        "ksante": "KSante", "bel": "Belveth", "pp": "Pantheon",
+        "yas": "Yasuo"
     }
     if raw in aliases:
         return aliases[raw]

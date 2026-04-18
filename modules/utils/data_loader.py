@@ -25,7 +25,7 @@ def _load_json(path: str) -> dict:
                 logger.warning(f"WARNING: {path} exists but is empty!")
             return data
     except FileNotFoundError:
-        logger.warning(f"WARNING: {path} not found! Run the build scripts in data/convert_data/ first.")
+        logger.warning(f"WARNING: {path} not found! Run the build scripts in scripts/ first.")
         return {}
     except json.JSONDecodeError:
         logger.warning(f"WARNING: {path} is corrupted!")
