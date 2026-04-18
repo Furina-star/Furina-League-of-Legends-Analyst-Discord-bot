@@ -34,20 +34,51 @@ os.chdir(BASE_DIR)
 logger.info("Loading MVP Dataset...")
 df_csv = pd.read_csv("data/training/upgraded_drafts.csv")
 
-# Extract passively mined data from the SQLite Database
+blue_cols = ['blueTop', 'blueJungle', 'blueMid', 'blueADC', 'blueSupport']
+red_cols = ['redTop', 'redJungle', 'redMid', 'redADC', 'redSupport']
+all_cols = blue_cols + red_cols
+
+# Get the list from Riot's data dragon
+logger.info("Downloading Master Champion List From Riot...")
+version = requests.get("https://ddragon.leagueoflegends.com/api/versions.json").json()[0]
+champ_data = requests.get(f"https://ddragon.leagueoflegends.com/cdn/{version}/data/en_US/champion.json").json()
+
+all_champions = []
+id_to_name = {}
+
+for champ_id, info in champ_data['data'].items():
+    all_champions.append(champ_id)
+    all_champions.append(info['name'])
+    id_to_name[str(info['key'])] = info['name']
+
+all_champions.extend(['None', 'Unknown'])
+
+# Safely connect to the DB and translate integer IDs to string Names
 logger.info("Extracting Live Mined Data from Database...")
 db_data = []
-with sqlite3.connect("data/live/server_state.db") as conn:
-    cursor = conn.cursor()
-    # Fetch all passively mined matches
-    cursor.execute("SELECT match_id, blue_win, payload FROM ml_training_data")
-    rows = cursor.fetchall()
+os.makedirs("data/live", exist_ok=True)
+db_path = "data/live/server_state.db"
 
-    for match_id, blue_win, payload_str in rows:
-        payload = json.loads(payload_str)
-        payload['matchId'] = match_id
-        payload['blueWin'] = blue_win
-        db_data.append(payload)
+if os.path.exists(db_path):
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT match_id, blue_win, payload FROM ml_training_data")
+            rows = cursor.fetchall()
+
+            for match_id, blue_win, payload_str in rows:
+                payload = json.loads(payload_str)
+                payload['matchId'] = match_id
+                payload['blueWin'] = blue_win
+
+                # Check if the passive miner fed us integer IDs and translate them
+                for col in all_cols:
+                    if col in payload and str(payload[col]).isdigit():
+                        payload[col] = id_to_name.get(str(payload[col]), 'Unknown')
+
+                db_data.append(payload)
+        except sqlite3.OperationalError:
+            logger.warning("Table 'ml_training_data' missing. Skipping live database load.")
 
 # Merge them together in memory
 if db_data:
@@ -67,58 +98,42 @@ logger.info("Loading Meta Database...")
 with open("data/static/Meta_Champions.json", "r") as f:
     meta_db = json.load(f)
 
-# Calculate Synergy Scores for every match using Pandas (Super Fast!)
+# Calculate Synergy Scores for every match
 logger.info("Calculating Team Synergy Scores...")
-blue_cols = ['blueTop', 'blueJungle', 'blueMid', 'blueADC', 'blueSupport']
-red_cols = ['redTop', 'redJungle', 'redMid', 'redADC', 'redSupport']
-all_cols = blue_cols + red_cols
-
-# This applies your calculator function to every single row in the CSV and creates two new columns
 df['blueSynergy'] = df.apply(lambda row: calculate_team_synergy([str(row[c]) for c in blue_cols], synergy_matrix, 0.50), axis=1)
 df['redSynergy'] = df.apply(lambda row: calculate_team_synergy([str(row[c]) for c in red_cols], synergy_matrix, 0.50), axis=1)
 
-# Create a quick helper function to grab the 10 win rates for every row in the CSV
-def get_meta_rates(row):
-    return [meta_db.get(str(row[c]), 0.5000) for c in all_cols]
-df['metaRates'] = df.apply(get_meta_rates, axis=1)
+# Calculate meta columns using FLAT dictionary architecture
+logger.info("Calculating Meta Scores...")
+roles_map = ['Top', 'Jungle', 'Mid', 'ADC', 'Support']
 
-# Grabbing every single champion out there just to be safe
-logger.info("Downloading Master Champion List From Riot...")
-version = requests.get("https://ddragon.leagueoflegends.com/api/versions.json").json()[0]
-champ_data = requests.get(f"https://ddragon.leagueoflegends.com/cdn/{version}/data/en_US/champion.json").json()
-
-all_champions = []
-for champ_id, info in champ_data['data'].items():
-    all_champions.append(champ_id)
-    all_champions.append(info['name'])
-
-all_champions.extend(['None', 'Unknown'])
+for role in roles_map:
+    df[f'blue{role}Meta'] = df[f'blue{role}'].apply(lambda c: meta_db.get(str(c), 0.5))
+    df[f'red{role}Meta'] = df[f'red{role}'].apply(lambda c: meta_db.get(str(c), 0.5))
 
 # Encode
 le = LabelEncoder()
 le.fit(all_champions)
-text_cols = [col for col in df.columns if col not in ['blueWin', 'matchId', 'blueSynergy', 'redSynergy', 'metaRates']]
+
+# Identify all text columns that need encoding (champion picks) while leaving numeric columns like synergy and meta scores intact
+text_cols = [col for col in df.columns if col not in [
+    'blueWin', 'matchId', 'blueSynergy', 'redSynergy',
+    'blueTopMeta', 'blueJungleMeta', 'blueMidMeta', 'blueADCMeta', 'blueSupportMeta',
+    'redTopMeta', 'redJungleMeta', 'redMidMeta', 'redADCMeta', 'redSupportMeta'
+]]
 
 logger.info("Translating CSV data...")
 for col in text_cols:
     df[col] = df[col].apply(lambda x: x if x in le.classes_ else 'Unknown')
     df[col] = le.transform(df[col].astype(str))
 
-# Save LabelEncoder using skops
+# Save LabelEncoder using standard JSON
 champion_mapping = {str(champ): int(idx) for idx, champ in enumerate(le.classes_)}
+os.makedirs("data/models", exist_ok=True)
 with open("data/models/champion_encoder.json", "w") as f:
     json.dump(champion_mapping, f, indent=4)
 
 num_unique_champions = len(le.classes_)
-
-# Calculate meta columns
-logger.info("Calculating Meta Scores...")
-roles_map = [('Top', 'top'), ('Jungle', 'jungle'), ('Mid', 'mid'), ('ADC', 'adc'), ('Support', 'support')]
-
-for role_cap, role_low in roles_map:
-    # Safely get the meta score, using r=role_low to force early binding of the loop variable
-    df[f'blue{role_cap}Meta'] = df[f'blue{role_cap}'].apply(lambda c, r=role_low: meta_db.get(str(c), {}).get(r, 0.5))
-    df[f'red{role_cap}Meta'] = df[f'red{role_cap}'].apply(lambda c, r=role_low: meta_db.get(str(c), {}).get(r, 0.5))
 
 logger.info("Extracting and Scaling Player Masteries and Ranks...")
 
@@ -126,13 +141,12 @@ roles = ['Top', 'Jungle', 'Mid', 'ADC', 'Support']
 mastery_cols = [f'blue{role}Mastery' for role in roles] + [f'red{role}Mastery' for role in roles]
 rank_cols = [f'blue{role}Rank' for role in roles] + [f'red{role}Rank' for role in roles]
 
-# Failsafe, fill missing values with 0 (Unranked/No Mastery)
 for col in mastery_cols + rank_cols:
     if col not in df.columns:
         df[col] = 0
     df[col] = df[col].fillna(0)
 
-# Splitting and Scaling
+# Splitting dataset (Done before scaling to stop Data Leakage)
 logger.info("Splitting dataset and scaling...")
 x_champs = df[all_cols]
 x_synergies = df[['blueSynergy', 'redSynergy']]
@@ -162,7 +176,6 @@ x_rnk_train = scaled_train[:, 10:]
 x_mas_test = scaled_test[:, :10]
 x_rnk_test = scaled_test[:, 10:]
 
-os.makedirs("data/models", exist_ok=True)
 joblib.dump(scaler, "data/models/scaler.pkl")
 
 # Convert to Tensors
@@ -180,20 +193,22 @@ x_mas_test_t = torch.tensor(x_mas_test, dtype=torch.float32)
 x_rnk_test_t = torch.tensor(x_rnk_test, dtype=torch.float32)
 y_test_t = torch.tensor(y_test.values, dtype=torch.float32).view(-1, 1)
 
-#Dynamic Batch scaling
+# Dynamic Batch scaling
 total_matches = len(df)
 if total_matches < 5000:
-    dynamic_batch = 64     # Small datasets need smaller batches to learn effectively
+    dynamic_batch = 64
 elif total_matches < 25000:
-    dynamic_batch = 128    # Medium datasets
+    dynamic_batch = 128
 elif total_matches < 100000:
-    dynamic_batch = 256    # Large datasets
+    dynamic_batch = 256
 else:
-    dynamic_batch = 512    # Massive datasets
+    dynamic_batch = 512
 
 logger.info(f"Dynamically set batch size to {dynamic_batch} based on {total_matches} total matches.")
 
 # Pack DataLoaders
+# Note: num_workers=0 is required for Windows to prevent multiprocessing fork crashes.
+# If deploying to Linux/Mac, set this to 4 for a massive data-loading speedup.
 train_dataset = TensorDataset(x_c_train_t, x_s_train_t, x_m_train_t, x_mas_train_t, x_rnk_train_t, y_train_t)
 train_loader = DataLoader(train_dataset, batch_size=dynamic_batch, shuffle=True, drop_last=True, num_workers=0)
 
@@ -205,7 +220,7 @@ model = Model(num_unique_champions, embedding_dim=config.EMBEDDING_DIM, dropout_
 model.to(device)
 criterion = nn.BCELoss()
 
-# Check for existing model weights to enable continuous learning, but with a very cautious learning rate to protect old knowledge
+# Continuous Learning block
 model_path = "data/models/Lol_draft_predictor.safetensors"
 optimizer_path = "data/models/optimizer.pt"
 
@@ -214,7 +229,6 @@ if os.path.exists(model_path):
     state_dict = load_file(model_path)
     model.load_state_dict(state_dict)
 
-    # Use a highly restrained learning rate to protect old knowledge
     optimizer = torch.optim.Adam(model.parameters(), lr=0.0005, weight_decay=1e-4)
 
     if os.path.exists(optimizer_path):
@@ -229,15 +243,15 @@ logger.info(f"Training on {len(x_c_train)} matches, Validating on {len(x_c_test)
 
 # Dynamic Patience Scaling
 best_val_loss = float('inf')
-patience = 5 if total_matches < 20000 else 8 # More data can handle a bit more patience to find those rare learning moments
+patience = 5 if total_matches < 20000 else 8
 patience_counter = 0
-num_epochs = 50 if total_matches < 20000 else 100 # More epochs for larger datasets to allow the model to fully learn complex patterns
+num_epochs = 50 if total_matches < 20000 else 100
 
 for epoch in range(num_epochs):
     model.train()
     running_loss = 0.0
     for batch_c, batch_s, batch_m, batch_mas, batch_rnk, batch_y in train_loader:
-        # Teleporting every single data batch to the hardware accelerator
+
         batch_c, batch_s, batch_m = batch_c.to(device), batch_s.to(device), batch_m.to(device)
         batch_mas, batch_rnk, batch_y = batch_mas.to(device), batch_rnk.to(device), batch_y.to(device)
 
@@ -253,7 +267,7 @@ for epoch in range(num_epochs):
     val_loss = 0.0
     with torch.no_grad():
         for batch_c, batch_s, batch_m, batch_mas, batch_rnk, batch_y in test_loader:
-            # Teleport validation batches to hardware accelerator
+
             batch_c, batch_s, batch_m = batch_c.to(device), batch_s.to(device), batch_m.to(device)
             batch_mas, batch_rnk, batch_y = batch_mas.to(device), batch_rnk.to(device), batch_y.to(device)
 
@@ -266,10 +280,9 @@ for epoch in range(num_epochs):
         best_val_loss = avg_val_loss
         patience_counter = 0
 
-        # Saving the model and the optimizer's momentum
         save_file(model.state_dict(), model_path)
         torch.save(optimizer.state_dict(), optimizer_path)
-        logger.info(f"Epoch [{epoch + 1}/{num_epochs}]  |  Train Loss: {avg_train_loss:.4f}  |  Val Loss: {avg_val_loss:.4f} (New Best!)")
+        logger.info(f"Epoch [{epoch + 1}/{num_epochs}]  |  Train Loss: {avg_train_loss:.4f}  |  Val Loss: {avg_val_loss:.4f} ⭐ (New Best!)")
     else:
         patience_counter += 1
         logger.info(f"Epoch [{epoch + 1}/{num_epochs}]  |  Train Loss: {avg_train_loss:.4f}  |  Val Loss: {avg_val_loss:.4f}  |  Strikes: {patience_counter}/{patience}")
@@ -281,14 +294,12 @@ for epoch in range(num_epochs):
 # Evaluation & Confusion Matrix
 model.eval()
 with torch.no_grad():
-    # Moving full test dataset to device for final prediction
     x_c_test_t, x_s_test_t, x_m_test_t = x_c_test_t.to(device), x_s_test_t.to(device), x_m_test_t.to(device)
     x_mas_test_t, x_rnk_test_t = x_mas_test_t.to(device), x_rnk_test_t.to(device)
 
     predictions = model(x_c_test_t, x_s_test_t, x_m_test_t, x_mas_test_t, x_rnk_test_t)
     predicted_classes = (predictions >= 0.5).float()
 
-# Calculate and print accuracy!
 y_true = y_test_t.cpu().numpy()
 y_pred = predicted_classes.cpu().numpy()
 

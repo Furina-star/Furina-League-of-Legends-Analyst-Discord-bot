@@ -166,8 +166,20 @@ class LeagueAI:
         return final_blue_prob, 1.0 - final_blue_prob
 
     # Bridge for the Live Tracker to use the updated ML logic
-    def predict_live_match(self, draft_dict: Dict[str, Any]) -> Tuple[float, float, float, float]:
-        return self.predict_match(draft_dict)
+    def predict_live_match(self, blue_picks: List[str], red_picks: List[str]) -> Tuple[
+        float, float, float, float, float, float]:
+        positions = ['top', 'jungle', 'mid', 'adc', 'support']
+
+        # Build the structured dicts
+        blue_dict = dict(zip(positions, blue_picks))
+        red_dict = dict(zip(positions, red_picks))
+        draft_dict = self._build_draft_input(blue_dict, red_dict)
+
+        # Run the primary ML prediction
+        blue_prob, red_prob, blue_syn, red_syn = self.predict_match(draft_dict)
+
+        # Returns 6 variables to perfectly match live_tracker.py expectations
+        return blue_prob, red_prob, 50.0, 50.0, blue_syn, red_syn
 
     # This function batch 50 drafts and send it through the model exactly once
     def predict_batch(self, draft_batch: List[Dict[str, Any]]) -> List[Tuple[float, float]]:

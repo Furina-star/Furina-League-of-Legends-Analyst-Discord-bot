@@ -94,9 +94,7 @@ class LiveTracker(commands.Cog):
                 blue_picks = [self.bot.champ_dict.get(str(p['championId']), 'Unknown') for p in raw_blue_team]
                 red_picks = [self.bot.champ_dict.get(str(p['championId']), 'Unknown') for p in raw_red_team]
 
-                final_blue_prob, final_red_prob, avg_blue_wr, avg_red_wr, blue_synergy, red_synergy = self.bot.ai_system.predict_live_match(
-                    blue_picks, red_picks, self.bot.meta_db, self.bot.role_db
-                )
+                final_blue_prob, final_red_prob, avg_blue_wr, avg_red_wr, blue_synergy, red_synergy = self.bot.ai_system.predict_live_match(blue_picks, red_picks)
 
                 positions = ['top', 'jungle', 'mid', 'adc', 'support']
                 blue_names = dict(zip(positions, extract_live_player_names(blue_picks, raw_blue_team, self.bot.champ_dict)))

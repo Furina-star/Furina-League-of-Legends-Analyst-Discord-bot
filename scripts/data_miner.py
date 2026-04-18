@@ -14,6 +14,10 @@ from collections import deque
 from dotenv import load_dotenv
 from services.riot_api import RiotAPIClient
 
+# Inject the parent directory into sys.path safely (str + str)
+SCRIPT_DIR = str(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.abspath(os.path.join(SCRIPT_DIR, "..")))
+
 load_dotenv()
 RIOT_KEY = os.getenv('RIOT_API_KEY')
 if not RIOT_KEY:
@@ -24,7 +28,6 @@ PLATFORM = "euw1"
 TARGET_MATCHES = 50000
 RATE_LIMIT_DELAY = 1.25
 
-SCRIPT_DIR = str(os.path.dirname(os.path.abspath(__file__)))
 CSV_FILENAME = str(os.path.join(SCRIPT_DIR, "../data", "training", "upgraded_drafts.csv"))
 
 if os.path.exists(CSV_FILENAME):
