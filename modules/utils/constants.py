@@ -31,5 +31,5 @@ DESC_CONFESS = "Confess your League of Legends sins to the Oratrice."
 # --- ARGUMENT PROMPTS ---
 ARG_REGION = "The server region (e.g., NA1, EUW1, KR)"
 ARG_RIOT_ID = "The player's Riot ID (e.g., Doublelift#NA1)"
-ARG_MATCH_INDEX = "Which match to judge? (1 = Last match, 2 = 2nd last, etc.)"
 ARG_SIN = "What did you do? (e.g., 'I stole my ADC's cannon minion')"
+ARG_DEFENDANT = "Tag the player you want to put on trial."

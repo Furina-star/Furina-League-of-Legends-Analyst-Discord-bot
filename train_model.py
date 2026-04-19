@@ -17,7 +17,7 @@ from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, accuracy_s
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.model_selection import train_test_split
 from torch.utils.data import TensorDataset, DataLoader
-from safetensors.torch import save_file, load_file
+from safetensors.torch import save_file, load
 from services.ai_wrapper import calculate_team_synergy, Model
 
 # Get the logging system
@@ -226,8 +226,18 @@ optimizer_path = "data/models/optimizer.pt"
 
 if os.path.exists(model_path):
     logger.info("Existing brain found! Loading previous weights for continuous learning...")
-    state_dict = load_file(model_path)
+
+    # Read raw bytes into memory to prevent the Windows file lock (OS Error 1224)
+    with open(model_path, "rb") as f:
+        model_bytes = f.read()
+
+    # Load the state dict from the memory bytes, not the file path
+    state_dict = load(model_bytes)
     model.load_state_dict(state_dict)
+
+    # Explicitly delete variables to free up RAM
+    del state_dict
+    del model_bytes
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.0005, weight_decay=1e-4)
 

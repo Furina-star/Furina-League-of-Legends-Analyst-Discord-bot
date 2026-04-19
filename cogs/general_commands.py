@@ -22,7 +22,7 @@ from modules.utils.constants import (
     ARG_RIOT_ID, ARG_REGION, CMD_PING, DESC_PING,
     CMD_HELP, DESC_HELP, CMD_TRIAL, DESC_TRIAL,
     ARG_MATCH_INDEX,CMD_CONFESS, DESC_CONFESS,
-    ARG_SIN
+    ARG_SIN, ARG_DEFENDANT
 )
 
 # Get the logger system
@@ -68,7 +68,7 @@ class GeneralCommands(commands.Cog):
     # The Trial command
     # What does it do? put the victim in trial and let furina judge for fun.
     @app_commands.command(name=_(CMD_TRIAL), description=_(DESC_TRIAL))
-    @app_commands.describe(defendant=_(ARG_MATCH_INDEX))
+    @app_commands.describe(defendant=_(ARG_DEFENDANT))
     @app_commands.checks.cooldown(1, 2, key=lambda i: i.user.id)
     async def trial(self, interaction: discord.Interaction, defendant: discord.Member):
 
@@ -109,8 +109,8 @@ class GeneralCommands(commands.Cog):
 
     # The Link Command
     # This is where it links Riot PUUID to Discord ID, so we can track their games and stats.
-    @app_commands.command(name=CMD_LINK, description=DESC_LINK)
-    @app_commands.describe(server=ARG_REGION, full_riot_id=ARG_RIOT_ID)
+    @app_commands.command(name=_(CMD_LINK), description=_(DESC_LINK))
+    @app_commands.describe(server=_(ARG_REGION), full_riot_id=_(ARG_RIOT_ID))
     @app_commands.checks.cooldown(1, 2, key=lambda i: i.user.id)
     @app_commands.autocomplete(server=server_autocomplete)
     async def link(self, interaction: discord.Interaction, server: str, full_riot_id: str):
@@ -165,7 +165,7 @@ class GeneralCommands(commands.Cog):
 
     # The Unlink Command
     # Unlink the Riot ID from the Discord User
-    @app_commands.command(name=CMD_UNLINK, description=DESC_UNLINK)
+    @app_commands.command(name=_(CMD_UNLINK), description=_(DESC_UNLINK))
     @app_commands.checks.cooldown(1, 2, key=lambda i: i.user.id)
     async def unlink(self, interaction: discord.Interaction):
         try:

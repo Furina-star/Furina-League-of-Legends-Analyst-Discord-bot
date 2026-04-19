@@ -8,15 +8,16 @@ import aiohttp
 import csv
 import os
 import sys
+
+# Inject the parent directory into sys.path safely (str + str)
+SCRIPT_DIR = str(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.abspath(os.path.join(SCRIPT_DIR, "..")))
+
 import aiofiles
 import pandas as pd
 from collections import deque
 from dotenv import load_dotenv
 from services.riot_api import RiotAPIClient
-
-# Inject the parent directory into sys.path safely (str + str)
-SCRIPT_DIR = str(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.abspath(os.path.join(SCRIPT_DIR, "..")))
 
 load_dotenv()
 RIOT_KEY = os.getenv('RIOT_API_KEY')
@@ -348,7 +349,7 @@ async def mine_data(seed_game_name, seed_tag_line):
 
 if __name__ == "__main__":
     try:
-        asyncio.run(mine_data("NattyNatt", "2005"))
+        asyncio.run(mine_data("Vasooooo", "650"))
     except KeyboardInterrupt:
         print("\n🛑 Execution Interrupted by User (Ctrl+C). Terminated Safely.")
         sys.exit(0)
