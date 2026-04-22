@@ -1,0 +1,21 @@
+# Configuration for the League of Legends draft simulator.
+# This file contains settings for the champion pool, team composition, and AI behavior.
+# Note: All winrate adjustments are additive to the base winrate.
+
+ai:
+  base_winrate: 0.50            # Base winrate for a perfectly balanced matchup
+  embedding_dim: 16             # Dimension of champion embeddings for synergy calculations
+  dropout_rate: 0.25            # Dropout rate for regularization in the synergy model
+
+  # Mastery thresholds
+  first_time_threshold: 10000   # below this mastery = first-timer
+  first_time_penalty: 0.015     # subtract this from win prob
+
+  # OTP detection
+  otp_threshold: 100000         # mastery floor to be considered OTP
+  otp_max_cap: 500000           # mastery ceiling for buff scaling
+  otp_buff_multiplier: 0.01     # per-100k mastery buff added to win prob
+
+  # Draft coach thresholds
+  high_synergy_threshold: 0.015 # minimum synergy delta to call it "high synergy"
+  strong_meta_threshold: 0.515  # minimum meta winrate to call it "strong meta"

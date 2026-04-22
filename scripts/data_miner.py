@@ -349,7 +349,7 @@ async def mine_data(seed_game_name, seed_tag_line):
 
 if __name__ == "__main__":
     try:
-        asyncio.run(mine_data("Vasooooo", "650"))
+        asyncio.run(mine_data("Aizy", "EASY"))
     except KeyboardInterrupt:
         print("\n🛑 Execution Interrupted by User (Ctrl+C). Terminated Safely.")
         sys.exit(0)

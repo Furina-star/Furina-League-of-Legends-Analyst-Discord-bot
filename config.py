@@ -2,6 +2,7 @@
 @File: config.py
 """
 import os
+import yaml
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -43,20 +44,26 @@ SUMMONER_SPELLS = {
     "21": "Barrier", "32": "Snowball"
 }
 
-# The AI magic numbers
-FIRST_TIME_THRESHOLD = 10000
-FIRST_TIME_PENALTY = 0.015
-OTP_THRESHOLD = 100000
-OTP_MAX_CAP = 500000
-OTP_BUFF_MULTIPLIER = 0.01
-BASE_WINRATE = 0.50
-
-# ML Hyperparameters
-EMBEDDING_DIM = 16
-DROPOUT_RATE = 0.25
-
 # The Directories
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Load AI Settings from YAML
+with open(os.path.join(BASE_DIR, "settings.yaml"), "r") as f:
+    _settings = yaml.safe_load(f)
+
+_ai = _settings["ai"]
+
+# AI Hyperparameters (Magic Numbers)
+BASE_WINRATE           = _ai["base_winrate"]
+EMBEDDING_DIM          = _ai["embedding_dim"]
+DROPOUT_RATE           = _ai["dropout_rate"]
+FIRST_TIME_THRESHOLD   = _ai["first_time_threshold"]
+FIRST_TIME_PENALTY     = _ai["first_time_penalty"]
+OTP_THRESHOLD          = _ai["otp_threshold"]
+OTP_MAX_CAP            = _ai["otp_max_cap"]
+OTP_BUFF_MULTIPLIER    = _ai["otp_buff_multiplier"]
+HIGH_SYNERGY_THRESHOLD = _ai["high_synergy_threshold"]
+STRONG_META_THRESHOLD  = _ai["strong_meta_threshold"]
 
 # Models
 MODEL_PATH = os.path.join(BASE_DIR, 'data/models', 'Lol_draft_predictor.safetensors')

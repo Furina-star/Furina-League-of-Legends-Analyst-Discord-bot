@@ -9,7 +9,7 @@ import json
 from itertools import combinations
 import logging
 from typing import List, Tuple, Dict, Any
-from config import MODEL_PATH, ENCODER_PATH, SCALER_PATH
+from config import MODEL_PATH, ENCODER_PATH, SCALER_PATH, HIGH_SYNERGY_THRESHOLD, STRONG_META_THRESHOLD
 import joblib
 import warnings
 
@@ -312,12 +312,12 @@ class LeagueAI:
                     best_syn_score = syn_score
                     best_ally = ally
 
-        if best_syn_score >= 0.015:
+        if best_syn_score >= HIGH_SYNERGY_THRESHOLD:
             return f"High synergy with {best_ally}."
 
         # Check if it's just a raw meta monster right now
         meta_wr = float(self.meta_db.get(champ, base_wr))
-        if meta_wr >= 0.515:
+        if meta_wr >= STRONG_META_THRESHOLD:
             return f"Strong current meta pick ({meta_wr * 100:.1f}% WR)."
 
         return "Solid balanced addition."
